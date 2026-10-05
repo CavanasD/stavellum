@@ -14,7 +14,7 @@ import pytest
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QComboBox, QGroupBox, QScrollArea
 
 from stavellum import gui as gui_module
 from stavellum.background import BackgroundJob
@@ -56,8 +56,8 @@ def document():
     )
     return ProjectDocument(project, [
         PartMapping("v1", "Violin I", ["violin"], instrument="violin", icon="violin"),
-        PartMapping("p1", "Pizz", ["pizz"], articulations={"pizz": "pizz."}),
-        PartMapping("b1", "Bell", ["bell"], instrument="bell"),
+        PartMapping("p1", "Pizz", ["pizz"], articulations={"pizz": "pizz."}, auto_ottava=True),
+        PartMapping("b1", "Bell", ["bell"], instrument="bell", auto_ottava=True),
     ], metadata=Metadata(title="测试曲"))
 
 
@@ -74,21 +74,35 @@ def embedded_test_icon(window):
     return reference, asset
 
 
-def test_explicit_icons_survive_instrument_change_and_auto_hide_controls(window):
+def test_explicit_icons_survive_instrument_change_and_visibility_toggle(window, tmp_path):
     reference, _ = embedded_test_icon(window)
+    assert window.use_icon.isChecked()
+    assert window.use_icon.text() == "使用乐器图标"
     window.instrument.setCurrentIndex(window.instrument.findData("piano"))
     assert window.icon.text() == reference
+    assert window.apply_part()
+    assert window.document.mappings[0].icon == reference
+    window.use_icon.setChecked(False)
+    assert not window.choose_icon_button.isEnabled()
+    assert not window.auto_icon_button.isEnabled()
+    window.instrument.setCurrentIndex(window.instrument.findData("cello"))
+    assert window.apply_part()
+    assert not window.document.mappings[0].use_icon
+    assert window.document.mappings[0].icon == reference
+    window.project_path = str(tmp_path / "hidden-icon.stproj")
+    assert window.save_project()
+    window.set_document(load_document(window.project_path))
+    assert not window.use_icon.isChecked()
+    assert window.icon.text() == reference
+    window.use_icon.setChecked(True)
+    assert window.choose_icon_button.isEnabled()
+    assert window.auto_icon_button.isEnabled()
     assert window.apply_part()
     assert window.document.mappings[0].icon == reference
     window.auto_icon_button.click()
     assert window.icon.text() == ""
     assert window.apply_part()
     assert window.document.mappings[0].icon == ""
-    window.hide_icon_button.click()
-    window.instrument.setCurrentIndex(window.instrument.findData("cello"))
-    assert window.icon.text() == "none"
-    assert window.apply_part()
-    assert window.document.mappings[0].icon == "none"
 
 
 def test_loading_project_refreshes_embedded_icon_name_and_thumbnail(window):
@@ -115,12 +129,16 @@ def test_invalid_fontawesome_input_does_not_replace_previous_mapping(window):
 
 def test_embedded_icon_survives_merge_split_and_reimport(window):
     reference, asset = embedded_test_icon(window)
+    window.use_icon.setChecked(False)
+    assert window.apply_part()
     window.parts.item(0).setSelected(True)
     window.parts.item(1).setSelected(True)
     window._merge_parts()
     assert window.document.mappings[0].icon == reference
+    assert not window.document.mappings[0].use_icon
     window._split_part()
     assert all(mapping.icon == reference for mapping in window.document.mappings[:2])
+    assert all(not mapping.use_icon for mapping in window.document.mappings[:2])
     source = copy.deepcopy(window.document.project)
     window._job = SimpleNamespace(reimporting=True)
     try:
@@ -129,6 +147,7 @@ def test_embedded_icon_survives_merge_split_and_reimport(window):
         window._job = None
     assert window.document.icon_assets == {reference[6:]: asset}
     assert all(mapping.icon == reference for mapping in window.document.mappings[:2])
+    assert all(not mapping.use_icon for mapping in window.document.mappings[:2])
 
 
 @pytest.mark.parametrize("accepted", [True, False])
@@ -171,6 +190,67 @@ def window(app, document, monkeypatch, tmp_path):
     app.processEvents()
 
 
+def test_file_and_export_menus_follow_document_and_worker_state(window):
+    file_menu, export_menu = [action.menu() for action in window.menuBar().actions()]
+    assert (file_menu.title(), export_menu.title()) == ("文件", "导出")
+    assert [action for action in file_menu.actions() if not action.isSeparator()][:-1] == [
+        window.new_action, window.open_action, window.demo_action, window.audio_action,
+        window.save_action, window.save_as_action, window.welcome_action,
+    ]
+    assert export_menu.actions() == [window.export_video_action, window.export_parts_action]
+    assert window.new_action.shortcut().toString() == "Ctrl+N"
+    assert window.open_action.shortcut().toString() == "Ctrl+O"
+    assert window.save_action.shortcut().toString() == "Ctrl+S"
+    document_actions = (
+        window.audio_action, window.save_action, window.save_as_action,
+        window.export_video_action, window.export_parts_action, window.compile_button,
+    )
+    opening_actions = (window.new_action, window.open_action, window.demo_action, window.welcome_action)
+    assert all(action.isEnabled() for action in (*document_actions, *opening_actions))
+    window._job = SimpleNamespace(_cancel_requested_at=None)
+    window._update_actions()
+    assert all(not action.isEnabled() for action in (*document_actions, *opening_actions))
+    window._job._cancel_requested_at = 1
+    window._update_actions()
+    assert all(not action.isEnabled() for action in (*document_actions, *opening_actions))
+    window._job = None
+    window._update_actions()
+    assert all(action.isEnabled() for action in (*document_actions, *opening_actions))
+    window.document = None
+    window._update_actions()
+    assert all(not action.isEnabled() for action in document_actions)
+    assert all(action.isEnabled() for action in opening_actions)
+
+
+@pytest.mark.parametrize("size,sidebar_width", [((1480, 920), 470), ((1000, 700), 420)])
+def test_grouped_tabs_remain_accessible_in_narrow_sidebar(window, app, size, sidebar_width):
+    from stavellum.qt import ensure_app
+
+    ensure_app()
+    window.resize(*size)
+    window.show()
+    window.tabs.parentWidget().setSizes([sidebar_width, size[0] - sidebar_width])
+    expected_counts = [3, 5, 7]
+    for index, count in enumerate(expected_counts):
+        window.tabs.setCurrentIndex(index)
+        app.processEvents()
+        tab = window.tabs.widget(index)
+        groups = tab.findChildren(QGroupBox)
+        assert len(groups) == count
+        assert len({group.parentWidget() for group in groups}) == 1
+        scroll = tab if isinstance(tab, QScrollArea) else tab.findChild(QScrollArea)
+        assert scroll.horizontalScrollBar().maximum() == 0
+        for group in groups:
+            scroll.ensureWidgetVisible(group)
+            app.processEvents()
+            assert group.isVisible()
+        for control in scroll.widget().findChildren(QComboBox):
+            scroll.ensureWidgetVisible(control)
+            app.processEvents()
+            assert control.width() > 50
+            assert scroll.viewport().rect().contains(control.mapTo(scroll.viewport(), control.rect().center()))
+
+
 def test_merge_split_and_order_preserve_notes_and_articulation(window):
     window.document.project.tracks[0].color = "#4080c0"
     window.document.project.tracks[1].color = "#c04080"
@@ -200,7 +280,7 @@ def test_merge_split_and_order_preserve_notes_and_articulation(window):
 def test_track_reassignment_and_settings_roundtrip(window, tmp_path):
     window.part_tracks.item(1).setCheckState(Qt.CheckState.Checked)
     window.part_name.setText("Violin I — arco / pizz.")
-    window.confirmed.setChecked(True)
+    window.use_icon.setChecked(True)
     window.keyswitches.setText("24, 25")
     window.articulations.setPlainText('{"violin": "arco", "pizz": "pizz."}')
     window.offset.setValue(1.25)
@@ -213,7 +293,7 @@ def test_track_reassignment_and_settings_roundtrip(window, tmp_path):
     assert window.save_project()
     restored = load_document(target)
     assert restored.mappings[0].track_ids == ["violin", "pizz"]
-    assert restored.mappings[0].confirmed
+    assert restored.mappings[0].use_icon
     assert restored.mappings[0].keyswitches == [24, 25]
     assert not restored.mappings[1].enabled
     assert restored.mappings[1].track_ids == []
@@ -227,12 +307,13 @@ def test_track_reassignment_and_settings_roundtrip(window, tmp_path):
 
 def test_render_and_inference_options_roundtrip_and_keep_encoder_quality_independent(window, tmp_path):
     assert window.auto_simplify_accidentals.isChecked()
-    assert window.auto_ottava.isChecked()
+    assert not window.auto_ottava.isChecked()
     assert window.auto_ottava.text() == "自动八度移位"
     assert "实际演奏音高" in window.auto_ottava.toolTip()
     assert not window._dirty
-    window.auto_ottava.setChecked(False)
+    window.auto_ottava.setChecked(True)
     assert window._dirty
+    window.auto_ottava.setChecked(False)
     window.auto_simplify_accidentals.setChecked(False)
     assert window._dirty
     assert window.auto_staccato.isChecked() and window.auto_grace.isChecked()
@@ -349,7 +430,7 @@ def test_reimport_enables_simplification_for_new_parts_and_preserves_existing_ch
     assert not by_track["violin"].auto_simplify_accidentals
     assert not by_track["violin"].auto_ottava
     assert by_track["flute"].auto_simplify_accidentals
-    assert by_track["flute"].auto_ottava
+    assert not by_track["flute"].auto_ottava
 
 
 def test_renderer_resources_close_on_replace_project_switch_failure_and_exit(window, monkeypatch):
@@ -1177,7 +1258,7 @@ def test_reimport_arco_only_preserves_corrections_and_removes_pizz_articulation(
 
     window.document.mappings = [PartMapping(
         "custom-violin", "Violin I 校正", ["violin", "pizz"], instrument="violin",
-        clef="alto", key_signature=-3, confirmed=True,
+        clef="alto", key_signature=-3, use_icon=True,
         articulations={"violin": "arco", "pizz": "pizz."},
     )]
     window.document.project.tracks[0].color = "#c04080"

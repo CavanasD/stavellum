@@ -64,7 +64,7 @@ def document_with_asset(reference, asset):
     return ProjectDocument(
         ProjectIR("fixture.mid", "midi", "Icons", tracks=[TrackInfo("v", "Violin")],
                   notes=[NoteEvent("n", "v", 0, 480, 72)], duration_ticks=960),
-        [PartMapping("v", "Violin", ["v"], instrument="violin", icon=reference, confirmed=True)],
+        [PartMapping("v", "Violin", ["v"], instrument="violin", icon=reference, use_icon=True)],
         settings=RenderSettings(width=640, height=360, render_backend="cpu", fps=24),
         icon_assets={reference[6:]: asset},
     )
@@ -162,10 +162,17 @@ def test_legacy_documents_omit_empty_assets_and_keep_auto_and_hide_semantics():
     assert compile_scene(document).parts[0].icon == ""
     document.mappings[0].icon = reference
     document.icon_assets[reference[6:]] = asset
-    document.mappings[0].confirmed = False
+    document.mappings[0].use_icon = False
     scene = compile_scene(document)
     assert scene.parts[0].icon == ""
     assert scene.icon_assets == {}
+    restored = ProjectDocument.from_dict(document.to_dict())
+    assert restored.mappings[0].icon == reference
+    assert not restored.mappings[0].use_icon
+    restored.mappings[0].use_icon = True
+    scene = compile_scene(restored)
+    assert scene.parts[0].icon == reference
+    assert scene.icon_assets == {reference[6:]: asset}
 
 
 @pytest.mark.parametrize("reference", ["fa:solid:missing-icon", "fa:thin:guitar", "fa:solid:../guitar", "asset:missing"])

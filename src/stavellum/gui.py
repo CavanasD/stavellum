@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -74,6 +75,15 @@ def _set_mapping_tracks(mapping: PartMapping, tracks: list[str]) -> None:
 def _seconds_label(seconds: float) -> str:
     seconds = max(0, round(seconds * 100))
     return f"{seconds // 6000:02d}:{seconds // 100 % 60:02d}.{seconds % 100:02d}"
+
+
+def _section(layout: QVBoxLayout, title: str) -> QFormLayout:
+    group = QGroupBox(title)
+    form = QFormLayout(group)
+    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+    form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+    layout.addWidget(group)
+    return form
 
 
 class PreviewCanvas(QWidget):
@@ -166,6 +176,8 @@ class MainWindow(QMainWindow):
         self.open_action.triggered.connect(self._choose_project)
         self.demo_action = QAction("打开三乐器示例", self)
         self.demo_action.triggered.connect(self._open_demo)
+        self.audio_action = QAction("选择原曲音频…", self)
+        self.audio_action.triggered.connect(self._choose_audio)
         self.save_action = QAction("保存项目", self)
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.save_project)
@@ -173,11 +185,22 @@ class MainWindow(QMainWindow):
         self.save_as_action.triggered.connect(lambda: self.save_project(save_as=True))
         self.welcome_action = QAction("欢迎页", self)
         self.welcome_action.triggered.connect(self._show_welcome)
-        for action in (self.new_action, self.open_action, self.demo_action,
-                       self.save_action, self.save_as_action, self.welcome_action):
+        for action in (self.new_action, self.open_action, self.demo_action):
             menu.addAction(action)
         menu.addSeparator()
+        for action in (self.audio_action, self.save_action, self.save_as_action):
+            menu.addAction(action)
+        menu.addSeparator()
+        menu.addAction(self.welcome_action)
+        menu.addSeparator()
         menu.addAction("退出", self.close)
+        export_menu = self.menuBar().addMenu("导出")
+        self.export_video_action = QAction("导出 MP4…", self)
+        self.export_video_action.triggered.connect(self._export_video)
+        self.export_parts_action = QAction("导出 MusicXML / PDF 分谱…", self)
+        self.export_parts_action.triggered.connect(self._export_parts)
+        export_menu.addAction(self.export_video_action)
+        export_menu.addAction(self.export_parts_action)
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -197,23 +220,8 @@ class MainWindow(QMainWindow):
         self.wizard.cancel_requested.connect(self._cancel_wizard)
         self.editor = QWidget()
         editor_layout = QVBoxLayout(self.editor)
-        top = QHBoxLayout()
-        self.open_button = QPushButton("打开 FLP / MIDI / 项目")
-        self.open_button.clicked.connect(self._choose_project)
-        self.new_button = QPushButton("创建新工程")
-        self.new_button.clicked.connect(lambda: self._new_project())
-        self.audio_button = QPushButton("选择原曲音频")
-        self.audio_button.clicked.connect(self._choose_audio)
         self.compile_button = QPushButton("更新预览")
         self.compile_button.clicked.connect(self.compile_preview)
-        self.export_video_button = QPushButton("导出 MP4")
-        self.export_video_button.clicked.connect(self._export_video)
-        self.export_parts_button = QPushButton("导出 MusicXML / PDF 分谱")
-        self.export_parts_button.clicked.connect(self._export_parts)
-        for button in (self.new_button, self.open_button, self.audio_button, self.compile_button,
-                       self.export_video_button, self.export_parts_button):
-            top.addWidget(button)
-        editor_layout.addLayout(top)
         splitter = QSplitter()
         self.tabs = QTabWidget()
         self.tabs.setMinimumWidth(420)
@@ -222,6 +230,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._settings_tab(), "画面与文字")
         right = QWidget()
         right_layout = QVBoxLayout(right)
+        preview_actions = QHBoxLayout()
+        preview_actions.addWidget(QLabel("谱面预览"))
+        preview_actions.addStretch(1)
+        preview_actions.addWidget(self.compile_button)
+        right_layout.addLayout(preview_actions)
         self.preview = PreviewCanvas()
         right_layout.addWidget(self.preview, 1)
         self.preview_status = QLabel("尚未生成谱面")
@@ -262,15 +275,18 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
     def _source_tab(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        source_form = _section(layout, "来源文件与 Arrangement")
         self.source_label = QLabel("尚未打开来源")
         self.source_label.setWordWrap(True)
         self.audio_label = QLabel("未选择音频；可以无声预览")
         self.audio_label.setWordWrap(True)
-        layout.addWidget(self.source_label)
-        layout.addWidget(self.audio_label)
-        form = QFormLayout()
+        source_form.addRow(self.source_label)
+        source_form.addRow(self.audio_label)
+        form = _section(layout, "速度、拍号与音频对齐")
         self.arrangement = QComboBox()
         self.reimport_button = QPushButton("按所选 Arrangement 重新导入")
         self.reimport_button.clicked.connect(self._reimport)
@@ -287,8 +303,8 @@ class MainWindow(QMainWindow):
         self.offset.setDecimals(3)
         self.offset.setSingleStep(0.01)
         self.offset.setSuffix(" 秒")
-        form.addRow("Arrangement", self.arrangement)
-        form.addRow(self.reimport_button)
+        source_form.addRow("Arrangement", self.arrangement)
+        source_form.addRow(self.reimport_button)
         form.addRow("速度 BPM", self.bpm)
         time_signature = QHBoxLayout()
         time_signature.addWidget(self.numerator)
@@ -297,19 +313,21 @@ class MainWindow(QMainWindow):
         form.addRow("拍号", time_signature)
         form.addRow(self.timing_confirmed)
         form.addRow("音频内乐谱零点", self.offset)
-        layout.addLayout(form)
         help_label = QLabel("偏移为音频中乐谱第一个拍点的位置。正值保留前奏留白，负值裁去谱面开头。")
         help_label.setWordWrap(True)
-        layout.addWidget(help_label)
-        layout.addWidget(QLabel("导入诊断"))
+        form.addRow(help_label)
+        diagnostics_form = _section(layout, "导入诊断")
         self.diagnostics = QTextBrowser()
+        self.diagnostics.setMinimumHeight(180)
         self.diagnostics.setOpenExternalLinks(False)
-        layout.addWidget(self.diagnostics, 1)
+        diagnostics_form.addRow(self.diagnostics)
+        layout.setStretch(2, 1)
         for field in (self.bpm, self.numerator, self.offset):
             field.valueChanged.connect(self._mark_dirty)
         self.denominator.currentIndexChanged.connect(self._mark_dirty)
         self.timing_confirmed.toggled.connect(self._mark_dirty)
-        return widget
+        scroll.setWidget(widget)
+        return scroll
 
     def _parts_tab(self) -> QWidget:
         outer = QWidget()
@@ -333,7 +351,12 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         editor = QWidget()
-        form = QFormLayout(editor)
+        editor_layout = QVBoxLayout(editor)
+        part_form = _section(editor_layout, "分谱名称与来源轨道")
+        icon_form = _section(editor_layout, "乐器与图标")
+        notation_form = _section(editor_layout, "谱表与音高记法")
+        recognition_form = _section(editor_layout, "节奏与自动识别")
+        mapping_form = _section(editor_layout, "来源映射与奏法")
         self.part_name = QLineEdit()
         self.part_enabled = QCheckBox("参与总谱、预览和导出")
         self.part_tracks = QListWidget()
@@ -352,6 +375,7 @@ class MainWindow(QMainWindow):
         self.icon = QLineEdit()
         self.icon.setPlaceholderText("留空自动匹配；例如 violin 或 fa:solid:guitar")
         icon_controls = QWidget()
+        self._icon_controls = icon_controls
         icon_layout = QVBoxLayout(icon_controls)
         icon_layout.setContentsMargins(0, 0, 0, 0)
         icon_row = QHBoxLayout()
@@ -369,15 +393,16 @@ class MainWindow(QMainWindow):
         icon_actions = QHBoxLayout()
         self.choose_icon_button = QPushButton("选择图标…")
         self.auto_icon_button = QPushButton("恢复自动")
-        self.hide_icon_button = QPushButton("不显示")
         self.choose_icon_button.clicked.connect(self._choose_icon)
         self.auto_icon_button.clicked.connect(lambda: self._set_icon(""))
-        self.hide_icon_button.clicked.connect(lambda: self._set_icon("none"))
-        for button in (self.choose_icon_button, self.auto_icon_button, self.hide_icon_button):
+        for button in (self.choose_icon_button, self.auto_icon_button):
             icon_actions.addWidget(button)
         icon_layout.addLayout(icon_actions)
         self.icon.textChanged.connect(self._update_icon_preview)
-        self.confirmed = QCheckBox("已确认乐器识别与图标")
+        self.use_icon = QCheckBox("使用乐器图标")
+        self.use_icon.setToolTip("在预览与视频中显示此分谱的图标；关闭后保留所选图标")
+        self.use_icon.toggled.connect(icon_controls.setEnabled)
+        icon_controls.setEnabled(self.use_icon.isChecked())
         self.clef = QComboBox()
         for label, key in (("自动", "auto"), ("高音", "treble"), ("低音", "bass"),
                            ("中音", "alto"), ("次中音", "tenor"), ("打击乐", "percussion")):
@@ -414,32 +439,40 @@ class MainWindow(QMainWindow):
         self.articulations = QPlainTextEdit()
         self.articulations.setMaximumHeight(100)
         self.articulations.setPlaceholderText('JSON 对象，来源轨道 ID → 奏法，例如 {"track-1": "pizz."}')
-        for label, control in (("分谱名称", self.part_name), ("", self.part_enabled),
-                               ("来源轨道", self.part_tracks), ("乐器", self.instrument),
-                               ("图标", icon_controls), ("", self.confirmed), ("谱号", self.clef),
-                               ("调号", self.key_signature), ("", self.auto_simplify_accidentals),
-                               ("", self.auto_ottava),
-                               ("记谱移调", self.transpose),
-                               ("量化格点", self.quantization), ("", self.triplets),
-                               ("", self.auto_staccato), ("", self.auto_grace),
-                               ("", self.auto_dynamics),
-                               ("", self.grand_staff), ("", self.percussion),
-                               ("Keyswitch 音高", self.keyswitches),
-                               ("打击乐音高映射", self.percussion_map),
-                               ("来源奏法", self.articulations)):
-            form.addRow(label, control)
+        for form, rows in (
+            (part_form, (("分谱名称", self.part_name), ("", self.part_enabled),
+                         ("来源轨道", self.part_tracks))),
+            (icon_form, (("乐器", self.instrument), ("", self.use_icon),
+                         ("图标", icon_controls))),
+            (notation_form, (("谱号", self.clef), ("调号", self.key_signature),
+                             ("记谱移调", self.transpose), ("", self.grand_staff),
+                             ("", self.percussion), ("", self.auto_simplify_accidentals),
+                             ("", self.auto_ottava))),
+            (recognition_form, (("量化格点", self.quantization), ("", self.triplets),
+                                ("", self.auto_staccato), ("", self.auto_grace),
+                                ("", self.auto_dynamics))),
+            (mapping_form, (("Keyswitch 音高", self.keyswitches),
+                            ("打击乐音高映射", self.percussion_map),
+                            ("来源奏法", self.articulations))),
+        ):
+            for label, control in rows:
+                if label:
+                    form.addRow(label, control)
+                else:
+                    form.addRow(control)
         self.apply_part_button = QPushButton("应用分谱设置")
         self.apply_part_button.clicked.connect(self.apply_part)
-        form.addRow(self.apply_part_button)
+        editor_layout.addWidget(self.apply_part_button)
         info = QLabel("勾选轨道会将其移入此分谱；原分谱若变空会自动停用。用合并保留声部身份，用拆分分离来源轨道。")
         info.setWordWrap(True)
-        form.addRow(info)
+        editor_layout.addWidget(info)
+        editor_layout.addStretch(1)
         scroll.setWidget(editor)
         layout.addWidget(scroll, 1)
         self._part_editor = editor
         for control in (self.part_name, self.icon, self.keyswitches):
             control.textEdited.connect(self._mark_dirty)
-        for control in (self.part_enabled, self.confirmed, self.triplets, self.auto_staccato,
+        for control in (self.part_enabled, self.use_icon, self.triplets, self.auto_staccato,
                         self.auto_grace, self.auto_dynamics, self.auto_simplify_accidentals,
                         self.auto_ottava,
                         self.grand_staff, self.percussion):
@@ -458,38 +491,53 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         widget = QWidget()
-        form = QFormLayout(widget)
+        layout = QVBoxLayout(widget)
+        metadata_form = _section(layout, "曲目信息")
+        frame_form = _section(layout, "画面尺寸与谱区布局")
+        text_form = _section(layout, "文字位置与字号")
+        animation_form = _section(layout, "声部动画")
+        overlay_form = _section(layout, "开场与报幕")
+        logo_form = _section(layout, "Logo")
+        encoding_form = _section(layout, "渲染与视频编码")
         self.metadata_controls: dict[str, QLineEdit] = {}
         for key, label in (("title", "曲名"), ("subtitle", "副标题"),
                            ("composer", "作曲"), ("arranger", "编曲")):
             control = QLineEdit()
             control.textEdited.connect(self._mark_dirty)
             self.metadata_controls[key] = control
-            form.addRow(label, control)
+            metadata_form.addRow(label, control)
         self.settings_controls: dict[str, Any] = {}
         self.render_backend = QComboBox()
+        self.render_backend.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.render_backend.setMinimumContentsLength(12)
         for label, key in (("自动（优先 RHI Vulkan，失败回退 CPU）", "auto"), ("CPU", "cpu"),
                            ("RHI Vulkan（不可用时报错）", "gpu")):
             self.render_backend.addItem(label, key)
         self.render_backend.currentIndexChanged.connect(self._mark_dirty)
-        form.addRow("帧渲染", self.render_backend)
+        self.render_backend.currentTextChanged.connect(self.render_backend.setToolTip)
+        self.render_backend.setToolTip(self.render_backend.currentText())
+        encoding_form.addRow("帧渲染", self.render_backend)
         self.video_encoder = QComboBox()
+        self.video_encoder.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.video_encoder.setMinimumContentsLength(12)
         for label, key in (("自动（优先 NVIDIA NVENC，失败回退 CPU）", "auto"),
                            ("CPU / libx264", "libx264"),
                            ("NVIDIA H.264 NVENC（不可用时报错）", "h264_nvenc")):
             self.video_encoder.addItem(label, key)
         self.video_encoder.currentIndexChanged.connect(self._encoder_options_changed)
-        form.addRow("视频编码", self.video_encoder)
+        self.video_encoder.currentTextChanged.connect(self.video_encoder.setToolTip)
+        self.video_encoder.setToolTip(self.video_encoder.currentText())
+        encoding_form.addRow("视频编码", self.video_encoder)
         self.animation_preset = QComboBox()
         for name, label in (("fast", "快速"), ("medium", "中速"), ("slow", "慢速"),
                             ("very_slow", "极慢"), ("custom", "自定义")):
             self.animation_preset.addItem(label, name)
         self.animation_preset.currentIndexChanged.connect(self._animation_preset_changed)
-        form.addRow("动画速度预设", self.animation_preset)
+        animation_form.addRow("动画速度预设", self.animation_preset)
         self.fps = QComboBox()
         self.fps.addItems(["24", "25", "30", "50", "60"])
         self.fps.currentIndexChanged.connect(self._mark_dirty)
-        form.addRow("帧率", self.fps)
+        frame_form.addRow("帧率", self.fps)
         specs = [
             ("width", "宽度", 320, 7680, 2), ("height", "高度", 240, 4320, 2),
             ("staff_scale", "基础谱面缩放", 0.3, 3.0, 0.05),
@@ -530,20 +578,30 @@ class MainWindow(QMainWindow):
             control.valueChanged.connect(self._animation_duration_changed if key in ANIMATION_DURATIONS
                                          else self._mark_dirty)
             self.settings_controls[key] = control
+            if key.startswith("title_") or key in {"subtitle_font_size", "credits_font_size"}:
+                form = text_form
+            elif key in {"enter_seconds", "exit_seconds", "reflow_seconds", "animation_stable_seconds"}:
+                form = animation_form
+            elif key in {"intro_delay_seconds", "overlay_enter_seconds", "overlay_exit_seconds", "announcement_hold_seconds"}:
+                form = overlay_form
+            elif key in {"cache_megabytes", "crf", "nvenc_cq"}:
+                form = encoding_form
+            else:
+                form = frame_form
             form.addRow(label, control)
         self.announcement_auto_hide = QCheckBox("报幕停留后淡出")
         self.announcement_auto_hide.toggled.connect(self._overlay_options_changed)
-        form.addRow(self.announcement_auto_hide)
+        overlay_form.insertRow(1, self.announcement_auto_hide)
         self._overlay_options_changed()
         self.logo_enabled = QCheckBox("在画面右下角显示软件 Logo")
         self.logo_enabled.toggled.connect(self._logo_options_changed)
-        form.addRow(self.logo_enabled)
+        logo_form.addRow(self.logo_enabled)
         self.logo_display_mode = QComboBox()
         for label, key in (("常驻", "persistent"), ("淡入后常驻", "fade_in"),
                            ("开场淡入，停留后淡出", "intro")):
             self.logo_display_mode.addItem(label, key)
         self.logo_display_mode.currentIndexChanged.connect(self._logo_options_changed)
-        form.addRow("Logo 显示方式", self.logo_display_mode)
+        logo_form.addRow("Logo 显示方式", self.logo_display_mode)
         for key, label, minimum, maximum, step in (
             ("logo_size_ratio", "Logo 大小（画面短边比例）", 0.02, 0.25, 0.01),
             ("logo_opacity", "Logo 最大不透明度", 0.0, 1.0, 0.05),
@@ -558,18 +616,19 @@ class MainWindow(QMainWindow):
             control.setToolTip("预览与视频共用；从画面零秒计时，独立于报幕和动画速度预设")
             control.valueChanged.connect(self._mark_dirty)
             self.settings_controls[key] = control
-            form.addRow(label, control)
+            logo_form.addRow(label, control)
         self._logo_options_changed()
         self.preset = QComboBox()
         self.preset.addItems(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"])
         self.preset.currentIndexChanged.connect(self._mark_dirty)
-        form.addRow("CPU 编码预设", self.preset)
+        encoding_form.insertRow(4, "CPU 编码预设", self.preset)
         self.nvenc_preset = QComboBox()
         self.nvenc_preset.addItems([f"p{value}" for value in range(1, 8)])
         self.nvenc_preset.setToolTip("p1 最快，p7 最慢；独立于 CPU 编码预设")
         self.nvenc_preset.currentIndexChanged.connect(self._mark_dirty)
-        form.addRow("NVENC 编码预设", self.nvenc_preset)
+        encoding_form.addRow("NVENC 编码预设", self.nvenc_preset)
         self._encoder_options_changed()
+        layout.addStretch(1)
         scroll.setWidget(widget)
         return scroll
 
@@ -633,11 +692,11 @@ class MainWindow(QMainWindow):
     def _update_actions(self) -> None:
         busy = self._job is not None
         has_document = self.document is not None
-        for control in (self.audio_button, self.compile_button, self.export_video_button,
-                        self.export_parts_button, self.save_action, self.save_as_action):
+        for control in (self.audio_action, self.compile_button, self.export_video_action,
+                        self.export_parts_action, self.save_action, self.save_as_action):
             control.setEnabled(has_document and not busy)
         for control in (self.open_action, self.demo_action, self.new_action,
-                        self.welcome_action, self.open_button, self.new_button):
+                        self.welcome_action):
             control.setEnabled(not busy)
         self.welcome.set_has_document(has_document)
         self.welcome.set_busy(busy)
@@ -990,7 +1049,7 @@ class MainWindow(QMainWindow):
         else:
             self.instrument.setCurrentText(mapping.instrument)
         self.icon.setText(mapping.icon)
-        self.confirmed.setChecked(mapping.confirmed)
+        self.use_icon.setChecked(mapping.use_icon)
         self.clef.setCurrentIndex(self.clef.findData(mapping.clef))
         self.key_signature.setCurrentIndex(self.key_signature.findData(mapping.key_signature))
         self.auto_simplify_accidentals.setChecked(mapping.auto_simplify_accidentals)
@@ -1027,7 +1086,10 @@ class MainWindow(QMainWindow):
             mapping.instrument = self._instrument_value()
             mapping.icon = self.icon.text().strip()
             resolve_icon(mapping.icon, self.document.icon_assets)
-            mapping.confirmed = self.confirmed.isChecked()
+            mapping.use_icon = self.use_icon.isChecked()
+            if mapping.icon == "none":
+                mapping.icon = ""
+                mapping.use_icon = False
             mapping.clef = self.clef.currentData()
             mapping.key_signature = self.key_signature.currentData()
             mapping.auto_simplify_accidentals = self.auto_simplify_accidentals.isChecked()
@@ -1061,6 +1123,9 @@ class MainWindow(QMainWindow):
                 self._loading = loading
             changed = mapping != self.document.mappings[self._part_index]
             self.document.mappings[self._part_index] = mapping
+            if self.icon.text().strip() == "none":
+                self.icon.clear()
+                self.use_icon.setChecked(False)
             if mapping.enabled:
                 moved = set(mapping.track_ids)
                 for index, other in enumerate(self.document.mappings):

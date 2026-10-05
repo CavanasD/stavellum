@@ -54,7 +54,6 @@ def create_demo_document(output_dir: str | Path | None = None, bars: int = 16, t
     project.notes.sort(key=lambda n: (n.start_tick, n.track_id, n.pitch))
     mappings = suggest_mappings(project)
     for mapping in mappings:
-        mapping.confirmed = True
         mapping.key_signature = -3
         if mapping.instrument in ("cello", "bell"):
             mapping.clef = "bass"

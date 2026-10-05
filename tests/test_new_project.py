@@ -50,7 +50,9 @@ def test_initial_state_and_existing_source_validation(wizard, source, tmp_path):
     assert wizard.steps.currentIndex() == 0
     assert not wizard.next_button.isEnabled()
     assert not wizard.back_button.isEnabled()
-    assert all(check.isChecked() for check in wizard.processing_checks.values())
+    assert {field: check.isChecked() for field, check in wizard.processing_checks.items()} == {
+        field: field != "auto_ottava" for field in wizard.processing_checks
+    }
     wizard.source_edit.setText(str(tmp_path / "missing.mid"))
     assert not wizard.next_button.isEnabled()
     unsupported = tmp_path / "music.txt"
@@ -68,7 +70,7 @@ def test_back_navigation_preserves_choices_and_skip_clears_audio(wizard, source,
     wizard.next_button.click()
     wizard.audio_edit.setText(str(audio))
     wizard.next_button.click()
-    wizard.processing_checks["auto_ottava"].setChecked(False)
+    wizard.processing_checks["auto_ottava"].setChecked(True)
     wizard.back_button.click()
     assert wizard.audio_edit.text() == str(audio)
     wizard.back_button.click()
@@ -77,7 +79,7 @@ def test_back_navigation_preserves_choices_and_skip_clears_audio(wizard, source,
     wizard.skip_button.click()
     assert wizard.steps.currentIndex() == 2
     assert wizard.audio_edit.text() == ""
-    assert not wizard.processing_checks["auto_ottava"].isChecked()
+    assert wizard.processing_checks["auto_ottava"].isChecked()
     assert "跳过" in wizard.summary_label.text()
     wizard.create_button.click()
     assert wizard.test_requests[0].audio_path == ""
@@ -98,20 +100,20 @@ def test_create_snapshots_paths_and_processing_without_decoding(wizard, source, 
     assert options.audio_path == str(audio.resolve())
     assert options.processing == {
         "auto_simplify_accidentals": False,
-        "auto_ottava": True,
+        "auto_ottava": False,
         "auto_staccato": True,
         "auto_grace": False,
         "auto_dynamics": True,
     }
-    wizard.processing_checks["auto_ottava"].setChecked(False)
-    assert options.processing["auto_ottava"] is True
+    wizard.processing_checks["auto_ottava"].setChecked(True)
+    assert options.processing["auto_ottava"] is False
 
 
 def test_reset_restores_defaults_and_removes_errors(wizard, source):
     _last_step(wizard, source)
     wizard.audio_edit.setText("old audio.wav")
     for control in wizard.processing_checks.values():
-        control.setChecked(False)
+        control.setChecked(not control.isChecked())
     wizard.set_error("导入失败", "Traceback details")
     wizard.set_busy(True, cancelling=True)
     wizard.reset(str(source))
@@ -120,7 +122,9 @@ def test_reset_restores_defaults_and_removes_errors(wizard, source):
     assert wizard.audio_edit.text() == ""
     assert wizard.error_label.text() == ""
     assert wizard.error_details.toPlainText() == ""
-    assert all(check.isChecked() for check in wizard.processing_checks.values())
+    assert {field: check.isChecked() for field, check in wizard.processing_checks.items()} == {
+        field: field != "auto_ottava" for field in wizard.processing_checks
+    }
     assert wizard.source_edit.isEnabled()
     assert wizard.cancel_button.isEnabled()
     assert wizard.next_button.isEnabled()

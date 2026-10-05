@@ -27,7 +27,7 @@ def project_file(tmp_path):
     document = ProjectDocument(project, [
         PartMapping("a", "Violin", ["a"], auto_staccato=False, auto_grace=True,
                     auto_simplify_accidentals=False, auto_ottava=False),
-        PartMapping("b", "Cello", ["b"], auto_staccato=True, auto_grace=False),
+        PartMapping("b", "Cello", ["b"], auto_staccato=True, auto_grace=False, auto_ottava=True),
     ])
     document.settings.render_backend = "cpu"
     document.settings.video_encoder = "libx264"
@@ -130,7 +130,7 @@ def test_import_defaults_to_simplification_and_accepts_overrides(
     monkeypatch.setattr(importers, "import_project", lambda *args: source)
     target = tmp_path / "imported.stproj"
     options = [] if enabled is None else [f"--{'' if enabled else 'no-'}{flag}"]
-    expected = enabled is not False
+    expected = (field_name != "auto_ottava") if enabled is None else enabled
     assert main(["import", "source.mid", "--output", str(target), *options]) == 0
     assert all(getattr(mapping, field_name) == expected for mapping in load_document(target).mappings)
     assert source == original

@@ -216,12 +216,12 @@ class PartMapping:
     keyswitches: list[int] = field(default_factory=list)
     articulations: dict[str, str] = field(default_factory=dict)
     enabled: bool = True
-    confirmed: bool = False
+    use_icon: bool = True
     auto_staccato: bool = True
     auto_grace: bool = True
     auto_dynamics: bool = True
     auto_simplify_accidentals: bool = True
-    auto_ottava: bool = True
+    auto_ottava: bool = False
 
 
 ANIMATION_DURATIONS = (
@@ -460,9 +460,24 @@ class ProjectDocument:
         asset_values = value.get("icon_assets", {})
         if not isinstance(asset_values, dict):
             raise ValueError("项目字段 icon_assets 必须为对象。")
+        mappings = []
+        for index, item in enumerate(_array(value.get("mappings", []), "mappings")):
+            location = f"mappings[{index}]"
+            if not isinstance(item, dict):
+                raise ValueError(f"项目字段 {location} 必须为对象。")
+            mapping_values = dict(item)
+            if "confirmed" in mapping_values:
+                legacy_use_icon = mapping_values.pop("confirmed")
+                _check_type(legacy_use_icon, bool, f"{location}.confirmed")
+                mapping_values.setdefault("use_icon", legacy_use_icon)
+            mapping = _restore(PartMapping, mapping_values, location)
+            if mapping.icon == "none":
+                mapping.icon = ""
+                mapping.use_icon = False
+            mappings.append(mapping)
         document = cls(
             project=_restore(ProjectIR, p, "project"),
-            mappings=[_restore(PartMapping, item, f"mappings[{index}]") for index, item in enumerate(_array(value.get("mappings", []), "mappings"))],
+            mappings=mappings,
             audio_path=value.get("audio_path", ""),
             settings=_restore(RenderSettings, settings_values, "settings"),
             metadata=_restore(Metadata, value.get("metadata", {}), "metadata"),

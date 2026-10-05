@@ -214,7 +214,8 @@ def test_wizard_coexists_with_editor_and_preserves_choices_on_switch(
 ):
     window = make_window()
     document, saved_path, _ = install_existing(window, source, app)
-    window._new_project(str(source))
+    window.new_action.trigger()
+    window.wizard.source_edit.setText(str(source))
     assert window.isVisible() and window.wizard.isVisible()
     assert window.wizard.isWindow()
     assert window.wizard.windowType() == Qt.WindowType.Tool
@@ -222,7 +223,7 @@ def test_wizard_coexists_with_editor_and_preserves_choices_on_switch(
     assert window.wizard.windowModality() == Qt.WindowModality.NonModal
     assert window.wizard.parentWidget() is window
     assert all(control.isEnabled() for control in (
-        window.tabs, window.save_action, window.compile_button, window.export_parts_button,
+        window.tabs, window.save_action, window.compile_button, window.export_parts_action,
         window.play_button, window.seek, window.new_action, window.open_action,
     ))
     window.metadata_controls["title"].setText("向导打开时编辑")
@@ -486,7 +487,8 @@ def test_raw_sources_enter_wizard_without_importing_or_confirming(
     selected = source.with_suffix(extension)
     selected.touch()
     monkeypatch.setattr(window, "_confirm_replace", lambda: pytest.fail("confirmed before creation"))
-    window.open_path(str(selected))
+    monkeypatch.setattr(gui.QFileDialog, "getOpenFileName", lambda *args: (str(selected), ""))
+    window.open_action.trigger()
     assert window.wizard.isVisible()
     assert window.wizard.source_edit.text() == str(selected)
     assert window._job is None

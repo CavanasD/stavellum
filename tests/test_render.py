@@ -39,7 +39,7 @@ def rendered_document(*, piano=False):
         [PartMapping("part", "Piano" if piano else "Violin", ["track"],
                      instrument="piano" if piano else "violin", grand_staff=piano,
                      clef="auto" if piano else "treble", key_signature=0,
-                     icon="piano" if piano else "violin", confirmed=True)],
+                     icon="piano" if piano else "violin", use_icon=True)],
         settings=RenderSettings(width=640, height=360, fps=30, cache_megabytes=8,
                                 render_backend="cpu"),
         metadata=Metadata(title="逐帧测试", subtitle="原始 RGBA", composer="Composer"),

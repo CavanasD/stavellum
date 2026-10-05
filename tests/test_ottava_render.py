@@ -40,7 +40,7 @@ def octave_scene(monkeypatch):
         document = ProjectDocument(
             ProjectIR("", "midi", "Octave geometry", tracks=tracks, notes=source),
             [PartMapping(track.track_id, track.name, [track.track_id],
-                         clef="treble" if octaves > 0 else "bass", key_signature=0)
+                         clef="treble" if octaves > 0 else "bass", key_signature=0, auto_ottava=True)
              for track in tracks],
             settings=RenderSettings(width=640, height=360, render_backend="cpu"),
         )
@@ -131,7 +131,7 @@ def test_piano_octave_lines_compile_for_both_staves_of_one_logical_part():
         ProjectIR("", "midi", "Piano octaves", tracks=[TrackInfo("p", "Piano")],
                   notes=[NoteEvent(f"{i}_{midi}", "p", i * 480, 480, midi)
                          for i in range(16) for midi in (88, 24)]),
-        [PartMapping("p", "Piano", ["p"], instrument="piano", key_signature=0)],
+        [PartMapping("p", "Piano", ["p"], instrument="piano", key_signature=0, auto_ottava=True)],
         settings=RenderSettings(render_backend="cpu"),
     )
     scene = compile_scene(document)

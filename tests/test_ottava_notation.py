@@ -18,6 +18,7 @@ def document(pitches, *, starts=None, durations=None, **options):
     events = [NoteEvent(str(index), "a", (starts or [i * 480 for i in range(len(pitches))])[index],
                         (durations or [480] * len(pitches))[index], midi)
               for index, midi in enumerate(pitches)]
+    options.setdefault("auto_ottava", True)
     mapping = PartMapping("p", "Part", ["a"], key_signature=0, **options)
     return ProjectDocument(ProjectIR("", "midi", "Octave test",
                                      tracks=[TrackInfo("a", "A")], notes=events), [mapping])

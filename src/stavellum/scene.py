@@ -531,7 +531,7 @@ def compile_scene(document: ProjectDocument) -> CompiledScene:
         content_bottom = max(staff_rects[i].bottom() for i in staff_indices)
         # Padding is source-space and scales with the engraved glyphs.
         parts.append(ScenePart(
-            part_id, m.name, (m.icon or m.instrument) if m.confirmed and m.icon != "none" else "",
+            part_id, m.name, (m.icon or m.instrument) if m.use_icon and m.icon != "none" else "",
             content_top - 100, content_bottom + 100,
             [centers[i] for i in staff_indices], events,
             activity_color=activity_color(document.project, m),

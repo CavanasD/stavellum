@@ -29,9 +29,55 @@ from stavellum.models import (
 
 def project_document():
     project = ProjectIR("source.flp", "flp", "项目", ppq=96, bpm=112.5, tracks=[TrackInfo("bow", "Violin I"), TrackInfo("pizz", "Violin I Pizz.")], notes=[NoteEvent("held", "bow", 7, 503, 72, velocity=95, midi_channel=2, source_pattern="Phrase", slide=True), NoteEvent("pluck", "pizz", 576, 0, 76, velocity=70)], diagnostics=[Diagnostic("warning", "slide", "请核对", "bow")], arrangement_names=["Main", "Alternative"], arrangement_index=1, duration_ticks=1152)
-    mapping = PartMapping("violin1", "Violin I", ["bow", "pizz"], instrument="violin", icon="violin", clef="treble", key_signature=-4, transpose=2, quantization=32, triplets=False, keyswitches=[24, 25], articulations={"bow": "arco", "pizz": "pizz."}, confirmed=True)
+    mapping = PartMapping("violin1", "Violin I", ["bow", "pizz"], instrument="violin", icon="violin", clef="treble", key_signature=-4, transpose=2, quantization=32, triplets=False, keyswitches=[24, 25], articulations={"bow": "arco", "pizz": "pizz."}, use_icon=True)
     settings = RenderSettings(width=1280, height=720, fps=30, staff_scale=1.25, score_start_in_audio_sec=-0.125, title_x=0.05, title_font_size=52, crf=20, preset="fast")
     return ProjectDocument(project, [mapping], audio_path="original.wav", settings=settings, metadata=Metadata("曲名", "副标题", "作曲者", "编曲者"))
+
+
+@pytest.mark.parametrize("legacy_enabled", [True, False])
+@pytest.mark.parametrize("new_enabled", [None, True, False])
+def test_legacy_icon_switch_migrates_without_changing_display_or_input(
+        tmp_path, legacy_enabled, new_enabled):
+    payload = project_document().to_dict()
+    mapping = payload["mappings"][0]
+    mapping.pop("use_icon")
+    mapping["confirmed"] = legacy_enabled
+    mapping["auto_ottava"] = True
+    if new_enabled is not None:
+        mapping["use_icon"] = new_enabled
+    before = deepcopy(payload)
+    document = ProjectDocument.from_dict(payload)
+    assert payload == before
+    assert document.mappings[0].use_icon is (legacy_enabled if new_enabled is None else new_enabled)
+    assert document.mappings[0].auto_ottava is True
+    destination = tmp_path / "migrated.stproj"
+    save_document(document, destination)
+    saved = json.loads(destination.read_text(encoding="utf-8"))
+    assert "confirmed" not in saved["mappings"][0]
+    assert saved["schema_version"] == 1
+    assert load_document(destination).mappings == document.mappings
+
+
+def test_missing_icon_switch_defaults_to_visible_and_legacy_none_stays_hidden():
+    payload = project_document().to_dict()
+    mapping = payload["mappings"][0]
+    mapping.pop("use_icon")
+    assert ProjectDocument.from_dict(payload).mappings[0].use_icon
+    mapping.update(confirmed=True, icon="none")
+    restored = ProjectDocument.from_dict(payload).mappings[0]
+    assert not restored.use_icon
+    assert restored.icon == ""
+
+
+@pytest.mark.parametrize("field_name", ["confirmed", "use_icon"])
+@pytest.mark.parametrize("value", [None, 0, "false"])
+def test_icon_visibility_rejects_nonboolean_project_fields(field_name, value):
+    payload = project_document().to_dict()
+    mapping = payload["mappings"][0]
+    mapping.pop("use_icon")
+    mapping[field_name] = value
+    with pytest.raises(ValueError, match=field_name):
+        ProjectDocument.from_dict(payload)
 
 
 def test_logo_settings_roundtrip_and_legacy_defaults(tmp_path):
@@ -111,11 +157,11 @@ def test_legacy_project_without_track_colors_loads_with_white_activity(tmp_path,
     restored.validate()
 
 
-@pytest.mark.parametrize("field_name", ["auto_simplify_accidentals", "auto_ottava"])
-def test_new_part_mapping_enables_notation_simplification_by_default(field_name):
+@pytest.mark.parametrize("field_name, expected", [("auto_simplify_accidentals", True), ("auto_ottava", False)])
+def test_new_part_mapping_uses_notation_defaults(field_name, expected):
     mapping = PartMapping("violin", "Violin", ["bow"])
-    assert getattr(mapping, field_name) is True
-    assert getattr(project_document().mappings[0], field_name) is True
+    assert getattr(mapping, field_name) is expected
+    assert getattr(project_document().mappings[0], field_name) is expected
 
 
 @pytest.mark.parametrize("field_name", ["auto_simplify_accidentals", "auto_ottava"])
@@ -135,15 +181,15 @@ def test_notation_simplification_setting_survives_save_without_schema_change(
     restored.validate()
 
 
-@pytest.mark.parametrize("field_name", ["auto_simplify_accidentals", "auto_ottava"])
-def test_legacy_project_without_notation_simplification_defaults_to_enabled(tmp_path, field_name):
+@pytest.mark.parametrize("field_name, expected", [("auto_simplify_accidentals", True), ("auto_ottava", False)])
+def test_legacy_project_without_notation_settings_uses_defaults(tmp_path, field_name, expected):
     document = project_document()
     payload = document.to_dict()
     del payload["mappings"][0][field_name]
     target = tmp_path / "legacy-spelling.stproj"
     target.write_text(json.dumps(payload), encoding="utf-8")
     restored = load_document(target)
-    assert getattr(restored.mappings[0], field_name) is True
+    assert getattr(restored.mappings[0], field_name) is expected
     assert restored.project.notes == document.project.notes
     assert restored.schema_version == 1
     restored.validate()
@@ -190,7 +236,7 @@ def test_absolute_references_stay_absolute_and_empty_audio_stays_empty(tmp_path)
 def test_unconfirmed_and_incomplete_projects_can_be_saved_for_correction(tmp_path):
     document = project_document()
     document.project.timing_confirmed = False
-    document.mappings[0].confirmed = False
+    document.mappings[0].use_icon = False
     document.mappings[0].key_signature = 12  # Pending correction, not structural corruption.
     filename = tmp_path / "unfinished.json"
     save_document(document, filename)
@@ -356,9 +402,9 @@ def test_invalid_encoder_or_text_settings_are_rejected(field_name, value):
         document.validate()
 
 
-def test_unconfirmed_instrument_identification_does_not_block_rendering():
+def test_disabled_instrument_icon_does_not_block_rendering():
     document = project_document()
-    document.mappings[0].confirmed = False
+    document.mappings[0].use_icon = False
     document.validate()
 
 

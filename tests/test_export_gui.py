@@ -81,6 +81,33 @@ def start_export(window, tmp_path):
     return window._job, window._export_dialog
 
 
+@pytest.mark.parametrize("operation", ["video", "parts"])
+def test_export_menu_uses_existing_worker_and_progress_workflow(window, tmp_path, monkeypatch, operation):
+    audio = tmp_path / "song.wav"
+    with wave.open(str(audio), "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(8000)
+        output.writeframes(b"\x00\x00" * 8000)
+    window.document.audio_path = str(audio)
+    destination = str(tmp_path / "result.mp4") if operation == "video" else str(tmp_path)
+    monkeypatch.setattr(gui.QFileDialog, "getSaveFileName", lambda *args: (destination, ""))
+    monkeypatch.setattr(gui.QFileDialog, "getExistingDirectory", lambda *args: destination)
+    action = window.export_video_action if operation == "video" else window.export_parts_action
+    action.trigger()
+    job = window._job
+    assert job.operation == operation and job.payload[1] == destination
+    assert job.payload[0].mappings == window.document.mappings
+    assert window._export_dialog.isVisible()
+    assert window.export_detail_button.isEnabled()
+    assert not window.export_video_action.isEnabled()
+    assert not window.export_parts_action.isEnabled()
+    job.cancelled.emit()
+    job.finished.emit()
+    assert window._job is None
+    assert window.export_video_action.isEnabled() and window.export_parts_action.isEnabled()
+
+
 def test_hide_reopen_and_worker_success_keep_result(window, tmp_path, monkeypatch):
     monkeypatch.setattr(gui.QMessageBox, "information", lambda *args: pytest.fail("duplicate success popup"))
     job, dialog = start_export(window, tmp_path)
@@ -143,11 +170,11 @@ def test_audio_selection_uses_common_formats_and_cancel_does_not_change_path(win
     sources = []
     monkeypatch.setattr(gui.QFileDialog, "getOpenFileName", choose)
     monkeypatch.setattr(window, "_set_audio", sources.append)
-    window._choose_audio()
+    window.audio_action.trigger()
     assert window.document.audio_path == selected and sources == [selected] and window._dirty
     assert calls[0][-1] == AUDIO_FILE_FILTER and "*.flac" in calls[0][-1]
     monkeypatch.setattr(gui.QFileDialog, "getOpenFileName", lambda *args: ("", ""))
-    window._choose_audio()
+    window.audio_action.trigger()
     assert sources == [selected] and window.document.audio_path == selected
 
 

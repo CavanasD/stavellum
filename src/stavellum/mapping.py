@@ -116,7 +116,7 @@ def suggest_mappings(project: ProjectIR) -> list[PartMapping]:
             instrument=instrument, icon="" if instrument == "unknown" else instrument,
             clef="percussion" if instrument == "percussion" else "auto",
             grand_staff=instrument == "piano", percussion=instrument == "percussion",
-            enabled=track.track_id in active, confirmed=False)
+            enabled=track.track_id in active)
         if instrument in _STRINGS:
             mapping.articulations[track.track_id] = articulation
             if group_key not in ambiguous_groups:

@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from .audio import AUDIO_FILE_FILTER
 from .branding import bind_application_icon
+from .models import PartMapping
 
 SOURCE_FILE_FILTER = "音乐来源 (*.flp *.mid *.midi);;FL Studio 工程 (*.flp);;MIDI 文件 (*.mid *.midi)"
 SOURCE_SUFFIXES = frozenset({".flp", ".mid", ".midi"})
@@ -301,8 +302,9 @@ class ProjectWizard(QWidget):
         self._cancelling = False
         self.source_edit.setText(str(source_path))
         self.audio_edit.clear()
-        for control in self.processing_checks.values():
-            control.setChecked(True)
+        defaults = PartMapping("", "", [])
+        for field, control in self.processing_checks.items():
+            control.setChecked(getattr(defaults, field))
         self.steps.setCurrentIndex(0)
         self.set_error("")
         self.set_busy(False)

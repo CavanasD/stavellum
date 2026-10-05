@@ -33,7 +33,8 @@ def test_string_techniques_merge_without_collapsing_voices():
     assert mappings[0].track_ids == ["track-0", "track-1"]
     assert mappings[1].track_ids == ["track-2", "track-3"]
     assert mappings[0].articulations == {"track-0": "arco", "track-1": "pizz."}
-    assert not any(mapping.confirmed for mapping in mappings)
+    assert all(mapping.use_icon for mapping in mappings)
+    assert not any(mapping.auto_ottava for mapping in mappings)
 
 
 def test_identical_named_voices_are_not_automatically_merged():
