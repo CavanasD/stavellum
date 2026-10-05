@@ -16,7 +16,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtSvg import QSvgRenderer
 
 from .gpu import GpuBackendError
-from .icons import icon_renderer
+from .icons import draw_image_icon, resolve_icon
 from .layout import FrameLayout, ease
 from .models import RenderSettings
 from .musicfont import metronome_renderer
@@ -611,13 +611,14 @@ class RasterFrameRenderer:
         draw_text_rect(painter, mark.label, mark.font_size, label,
                        alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-    @staticmethod
-    def _draw_icon(painter: QPainter, kind: str, center: QPointF, size: float) -> None:
+    def _draw_icon(self, painter: QPainter, kind: str, center: QPointF, size: float) -> None:
         """Use bundled SVGs where matched, with original pictograms as fallback."""
-        renderer = icon_renderer(kind)
+        if kind in ("none", "unknown", ""):
+            return
+        renderer = resolve_icon(kind, self.scene.icon_assets)
         if renderer is not None:
-            renderer.render(painter, QRectF(center.x() - size / 2, center.y() - size / 2,
-                                           size, size))
+            draw_image_icon(painter, renderer, QRectF(center.x() - size / 2, center.y() - size / 2,
+                                                    size, size))
             return
         painter.save()
         painter.translate(center)

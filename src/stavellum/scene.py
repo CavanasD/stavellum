@@ -15,9 +15,10 @@ from PySide6.QtSvg import QSvgRenderer
 
 from .axis import TimeAxis
 from .camera import CameraTimeline, compile_camera
+from .icons import resolve_icon
 from .layout import FrameLayout, LayoutTimeline, _Track, compile_layout, ease
 from .mapping import activity_color
-from .models import Diagnostic, Metadata, ProjectDocument, RenderSettings
+from .models import Diagnostic, IconAsset, Metadata, ProjectDocument, RenderSettings
 from .musicfont import metronome_renderer
 from .qt import ensure_app
 from .svg import normalize_svg
@@ -114,6 +115,7 @@ class CompiledScene:
     camera: CameraTimeline | None = None
     tempo_mark: TempoMark | None = None
     octave_spans: list[SceneOctaveSpan] = field(default_factory=list)
+    icon_assets: dict[str, IconAsset] = field(default_factory=dict)
 
     @property
     def body_left(self) -> float:
@@ -401,6 +403,9 @@ def compile_scene(document: ProjectDocument) -> CompiledScene:
 
     document.validate()
     ensure_app()
+    for mapping in document.mappings:
+        if mapping.enabled:
+            resolve_icon(mapping.icon, document.icon_assets)
     notation = build_notation(document)
     svg = normalize_svg(notation.display_svg)
     root = ET.fromstring(svg)
@@ -526,7 +531,7 @@ def compile_scene(document: ProjectDocument) -> CompiledScene:
         content_bottom = max(staff_rects[i].bottom() for i in staff_indices)
         # Padding is source-space and scales with the engraved glyphs.
         parts.append(ScenePart(
-            part_id, m.name, (m.icon or m.instrument) if m.confirmed else "",
+            part_id, m.name, (m.icon or m.instrument) if m.confirmed and m.icon != "none" else "",
             content_top - 100, content_bottom + 100,
             [centers[i] for i in staff_indices], events,
             activity_color=activity_color(document.project, m),
@@ -542,6 +547,8 @@ def compile_scene(document: ProjectDocument) -> CompiledScene:
     score_duration = max(document.project.duration_seconds, max((e.end_beat for e in notation.quantized_events), default=0) * 60 / document.project.bpm)
     svg = ET.tostring(root, encoding="unicode")
     scene = CompiledScene(svg, tuple(renderer.viewBoxF().getRect()), axis, parts, s, replace(document.metadata), document.project.bpm, bar_beats, score_duration, scale, header_left, header_right, list(notation.diagnostics), measure_bounds, owners)
+    scene.icon_assets = {digest: replace(asset) for digest, asset in document.icon_assets.items()
+                         if any(part.icon == f"asset:{digest}" for part in parts)}
     scene.octave_spans = octave_spans
     terminal_bounds = [_bounds(renderer, element) for element in measures[-1]
                        if "barLine" in _classes(element)]

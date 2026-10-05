@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
 import math
 import tempfile
@@ -335,6 +338,34 @@ class Metadata:
 
 
 @dataclass(slots=True)
+class IconAsset:
+    """An embedded, render-ready image; no local paths or Qt objects."""
+
+    name: str
+    media_type: str
+    data: str
+    source: str = "custom"
+
+    def decoded(self) -> bytes:
+        try:
+            return base64.b64decode(self.data, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError(f"图标 {self.name} 的 Base64 数据无效。") from exc
+
+
+def _check_icon_assets(document: ProjectDocument) -> None:
+    for digest, asset in document.icon_assets.items():
+        if asset.media_type not in ("image/svg+xml", "image/png", "image/jpeg", "image/webp"):
+            raise ValueError(f"图标 {asset.name} 的图片格式不受支持。")
+        data = asset.decoded()
+        if not data or hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError(f"图标 {asset.name} 的内容校验失败。")
+    for mapping in document.mappings:
+        if mapping.icon.startswith("asset:") and mapping.icon[6:] not in document.icon_assets:
+            raise ValueError(f"分谱 {mapping.name} 引用了缺失的图标资源。")
+
+
+@dataclass(slots=True)
 class ProjectDocument:
     project: ProjectIR
     mappings: list[PartMapping]
@@ -342,9 +373,15 @@ class ProjectDocument:
     settings: RenderSettings = field(default_factory=RenderSettings)
     metadata: Metadata = field(default_factory=Metadata)
     schema_version: int = 1
+    icon_assets: dict[str, IconAsset] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        value = asdict(self)
+        referenced = {mapping.icon[6:] for mapping in self.mappings if mapping.icon.startswith("asset:")}
+        value["icon_assets"] = {key: asset for key, asset in value["icon_assets"].items() if key in referenced}
+        if not value["icon_assets"]:
+            value.pop("icon_assets")
+        return value
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> ProjectDocument:
@@ -403,18 +440,25 @@ class ProjectDocument:
         settings_values = dict(settings_values)
         settings_values.pop("tempo_display_mode", None)
         settings_values.pop("tempo_hold_seconds", None)
+        asset_values = value.get("icon_assets", {})
+        if not isinstance(asset_values, dict):
+            raise ValueError("项目字段 icon_assets 必须为对象。")
         document = cls(
             project=_restore(ProjectIR, p, "project"),
             mappings=[_restore(PartMapping, item, f"mappings[{index}]") for index, item in enumerate(_array(value.get("mappings", []), "mappings"))],
             audio_path=value.get("audio_path", ""),
             settings=_restore(RenderSettings, settings_values, "settings"),
             metadata=_restore(Metadata, value.get("metadata", {}), "metadata"),
+            icon_assets={key: _restore(IconAsset, item, f"icon_assets[{key!r}]")
+                         for key, item in asset_values.items()},
         )
         _check_record(document, "document")
+        _check_icon_assets(document)
         return document
 
     def validate(self) -> None:
         _check_record(self, "document")
+        _check_icon_assets(self)
         if self.schema_version != 1:
             raise ValueError("不支持此项目文件版本。")
         self.settings.validate()
@@ -518,6 +562,7 @@ class ProjectDocument:
 def save_document(document: ProjectDocument, path: str | Path) -> None:
     # Persist incomplete editing work; rendering readiness is checked separately.
     _check_record(document, "document")
+    _check_icon_assets(document)
     if document.schema_version != 1:
         raise ValueError("不支持此项目文件版本。")
     payload = json.dumps(document.to_dict(), ensure_ascii=False, indent=2, allow_nan=False)

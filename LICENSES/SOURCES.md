@@ -4,6 +4,7 @@ Downloaded on 2026-10-05 without changing their contents.
 
 | File | SHA-256 | Source |
 | --- | --- | --- |
+| `src/stavellum/assets/fontawesome/LICENSE.txt` | 20c6f40715a567c97b80f6944beb8bb325835cab47ea7dcab89ee3b8e077eced | https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-7.3.1.tgz (`package/LICENSE.txt`) |
 | `LICENSE` | 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986 | https://www.gnu.org/licenses/gpl-3.0.txt |
 | `LICENSES/LGPL-3.0.txt` | 996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1 | https://raw.githubusercontent.com/spdx/license-list-data/main/text/LGPL-3.0-only.txt |
 | `LICENSES/PyFLP-2.2.1.txt` | 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986 | https://raw.githubusercontent.com/demberto/PyFLP/v2.2.1/LICENSE |

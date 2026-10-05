@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QImage, QPainter, QPalette
+from PySide6.QtGui import QAction, QCloseEvent, QImage, QPainter, QPalette, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
 from .audio import AUDIO_FILE_FILTER
 from .background import BackgroundJob, default_demo_directory
 from .branding import application_icon
+from .icons import icon_thumbnail, resolve_icon
 from .models import (
     ANIMATION_DURATIONS,
     ANIMATION_PRESETS,
@@ -349,7 +350,33 @@ class MainWindow(QMainWindow):
                            ("percussion", "打击乐")):
             self.instrument.addItem(f"{label} ({key})", key)
         self.icon = QLineEdit()
-        self.icon.setPlaceholderText("例如 violin、piano、bell；留空不显示图标")
+        self.icon.setPlaceholderText("留空自动匹配；例如 violin 或 fa:solid:guitar")
+        icon_controls = QWidget()
+        icon_layout = QVBoxLayout(icon_controls)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_row = QHBoxLayout()
+        self.icon_preview = QLabel()
+        self.icon_preview.setFixedSize(48, 48)
+        self.icon_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_preview.setStyleSheet("background: #171717; color: white;")
+        icon_row.addWidget(self.icon_preview)
+        icon_row.addWidget(self.icon, 1)
+        self.icon_name = QLabel()
+        self.icon_name.setWordWrap(True)
+        self.icon_name.hide()
+        icon_row.addWidget(self.icon_name, 1)
+        icon_layout.addLayout(icon_row)
+        icon_actions = QHBoxLayout()
+        self.choose_icon_button = QPushButton("选择图标…")
+        self.auto_icon_button = QPushButton("恢复自动")
+        self.hide_icon_button = QPushButton("不显示")
+        self.choose_icon_button.clicked.connect(self._choose_icon)
+        self.auto_icon_button.clicked.connect(lambda: self._set_icon(""))
+        self.hide_icon_button.clicked.connect(lambda: self._set_icon("none"))
+        for button in (self.choose_icon_button, self.auto_icon_button, self.hide_icon_button):
+            icon_actions.addWidget(button)
+        icon_layout.addLayout(icon_actions)
+        self.icon.textChanged.connect(self._update_icon_preview)
         self.confirmed = QCheckBox("已确认乐器识别与图标")
         self.clef = QComboBox()
         for label, key in (("自动", "auto"), ("高音", "treble"), ("低音", "bass"),
@@ -389,7 +416,7 @@ class MainWindow(QMainWindow):
         self.articulations.setPlaceholderText('JSON 对象，来源轨道 ID → 奏法，例如 {"track-1": "pizz."}')
         for label, control in (("分谱名称", self.part_name), ("", self.part_enabled),
                                ("来源轨道", self.part_tracks), ("乐器", self.instrument),
-                               ("图标", self.icon), ("", self.confirmed), ("谱号", self.clef),
+                               ("图标", icon_controls), ("", self.confirmed), ("谱号", self.clef),
                                ("调号", self.key_signature), ("", self.auto_simplify_accidentals),
                                ("", self.auto_ottava),
                                ("记谱移调", self.transpose),
@@ -765,7 +792,8 @@ class MainWindow(QMainWindow):
                     part_ids.add(mapping.part_id)
                     retained.append(mapping)
             document = ProjectDocument(project, retained, old.audio_path,
-                                       copy.deepcopy(old.settings), copy.deepcopy(old.metadata))
+                                       copy.deepcopy(old.settings), copy.deepcopy(old.metadata),
+                                       icon_assets=copy.deepcopy(old.icon_assets))
         else:
             document = ProjectDocument(project, suggested, metadata=Metadata(title=project.name))
         self.set_document(document)
@@ -812,6 +840,7 @@ class MainWindow(QMainWindow):
         self._set_audio(document.audio_path)
         self._show_diagnostics()
         self._loading = False
+        self._update_icon_preview()
         self._dirty = False
         self._position = 0.0
         self._switch_window(self)
@@ -938,6 +967,7 @@ class MainWindow(QMainWindow):
         self.percussion_map.setPlainText(json.dumps(mapping.percussion_map, ensure_ascii=False, indent=2))
         self.articulations.setPlainText(json.dumps(mapping.articulations, ensure_ascii=False, indent=2))
         self._loading = was_loading
+        self._update_icon_preview()
 
     def apply_part(self, checked: bool = False, *, refresh: bool = True) -> bool:
         if not self.document or self._part_index < 0:
@@ -956,6 +986,7 @@ class MainWindow(QMainWindow):
                 raise ValueError("已启用分谱至少需要一个来源轨道。")
             mapping.instrument = self._instrument_value()
             mapping.icon = self.icon.text().strip()
+            resolve_icon(mapping.icon, self.document.icon_assets)
             mapping.confirmed = self.confirmed.isChecked()
             mapping.clef = self.clef.currentData()
             mapping.key_signature = self.key_signature.currentData()
@@ -1017,9 +1048,44 @@ class MainWindow(QMainWindow):
 
     def _instrument_changed(self, *args: Any) -> None:
         if not self._loading:
-            instrument = self._instrument_value()
-            if self.instrument.findData(instrument) >= 0:
-                self.icon.setText("" if instrument == "unknown" else instrument)
+            self._update_icon_preview()
+
+    def _set_icon(self, reference: str) -> None:
+        self.icon.setText(reference)
+        self._mark_dirty()
+
+    def _update_icon_preview(self, *args: Any) -> None:
+        if self._loading or not self.document:
+            return
+        reference = self.icon.text().strip() or self._instrument_value()
+        asset = self.document.icon_assets.get(reference.removeprefix("asset:")) if reference.startswith("asset:") else None
+        self.icon.setVisible(asset is None)
+        self.icon_name.setVisible(asset is not None)
+        if asset is not None:
+            if asset.source.startswith("fontawesome:"):
+                self.icon_name.setText("Font Awesome · " + asset.source.removeprefix("fontawesome:").replace(":", "/"))
+            else:
+                self.icon_name.setText(asset.name)
+        try:
+            image = icon_thumbnail(reference, self.document.icon_assets)
+            self.icon_preview.setPixmap(QPixmap.fromImage(image))
+            self.icon_preview.setToolTip(asset.name if asset else reference)
+        except (ValueError, OSError, RuntimeError) as exc:
+            self.icon_preview.setText("!")
+            self.icon_preview.setToolTip(str(exc))
+
+    def _choose_icon(self) -> None:
+        if not self.document:
+            return
+        from .icon_picker import IconPicker
+
+        dialog = IconPicker(self.recent_projects.settings, self)
+        if dialog.exec() == dialog.DialogCode.Accepted and dialog.selection is not None:
+            reference, asset = dialog.selection
+            if asset is not None:
+                self.document.icon_assets.setdefault(reference[6:], asset)
+            self._set_icon(reference)
+        dialog.deleteLater()
 
     def _add_part(self) -> None:
         if not self.document or not self.apply_part(refresh=False):
@@ -1180,7 +1246,7 @@ class MainWindow(QMainWindow):
                 path += ".stproj"
         try:
             save_document(self.document, path)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             self._show_error(f"保存失败：{exc}")
             return False
         self.project_path = path

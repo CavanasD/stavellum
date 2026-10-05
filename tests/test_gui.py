@@ -61,6 +61,100 @@ def document():
     ], metadata=Metadata(title="测试曲"))
 
 
+def embedded_test_icon(window):
+    from stavellum.icons import make_icon_asset
+
+    reference, asset = make_icon_asset(
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="red"/></svg>',
+        "red.svg", "image/svg+xml",
+    )
+    window.document.icon_assets[reference[6:]] = asset
+    window._set_icon(reference)
+    assert window.apply_part()
+    return reference, asset
+
+
+def test_explicit_icons_survive_instrument_change_and_auto_hide_controls(window):
+    reference, _ = embedded_test_icon(window)
+    window.instrument.setCurrentIndex(window.instrument.findData("piano"))
+    assert window.icon.text() == reference
+    assert window.apply_part()
+    assert window.document.mappings[0].icon == reference
+    window.auto_icon_button.click()
+    assert window.icon.text() == ""
+    assert window.apply_part()
+    assert window.document.mappings[0].icon == ""
+    window.hide_icon_button.click()
+    window.instrument.setCurrentIndex(window.instrument.findData("cello"))
+    assert window.icon.text() == "none"
+    assert window.apply_part()
+    assert window.document.mappings[0].icon == "none"
+
+
+def test_loading_project_refreshes_embedded_icon_name_and_thumbnail(window):
+    reference, _ = embedded_test_icon(window)
+    window.auto_icon_button.click()  # Leave the old text field visible before loading.
+    assert not window.icon.isHidden()
+    window.set_document(window.document)
+    assert window.icon.text() == reference
+    assert window.icon.isHidden() and not window.icon_name.isHidden()
+    assert window.icon_name.text() == "red.svg"
+    assert window.icon_preview.pixmap().toImage().pixelColor(24, 24).red() == 255
+    assert not window._dirty
+
+
+def test_invalid_fontawesome_input_does_not_replace_previous_mapping(window):
+    reference, _ = embedded_test_icon(window)
+    before = copy.deepcopy(window.document.mappings[0])
+    window.icon.setText("fa:solid:missing-icon")
+    assert not window.apply_part()
+    assert window.document.mappings[0] == before
+    assert window.document.mappings[0].icon == reference
+    assert "Font Awesome" in window.test_errors[-1]
+
+
+def test_embedded_icon_survives_merge_split_and_reimport(window):
+    reference, asset = embedded_test_icon(window)
+    window.parts.item(0).setSelected(True)
+    window.parts.item(1).setSelected(True)
+    window._merge_parts()
+    assert window.document.mappings[0].icon == reference
+    window._split_part()
+    assert all(mapping.icon == reference for mapping in window.document.mappings[:2])
+    source = copy.deepcopy(window.document.project)
+    window._job = SimpleNamespace(reimporting=True)
+    try:
+        window._source_imported(source)
+    finally:
+        window._job = None
+    assert window.document.icon_assets == {reference[6:]: asset}
+    assert all(mapping.icon == reference for mapping in window.document.mappings[:2])
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+def test_icon_picker_only_changes_project_on_accept(window, monkeypatch, accepted):
+    from stavellum import icon_picker
+    from stavellum.icons import make_icon_asset
+
+    selection = make_icon_asset(
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5"/></svg>',
+        "round.svg", "image/svg+xml",
+    )
+    before = copy.deepcopy(window.document.to_dict())
+    previous_text = window.icon.text()
+    dialog = SimpleNamespace(selection=selection, DialogCode=SimpleNamespace(Accepted=1),
+                             exec=lambda: int(accepted), deleteLater=lambda: None)
+    monkeypatch.setattr(icon_picker, "IconPicker", lambda *args: dialog)
+    window._choose_icon()
+    if accepted:
+        assert window.icon.text() == selection[0]
+        assert window.document.icon_assets == {selection[0][6:]: selection[1]}
+        assert window._dirty
+    else:
+        assert window.icon.text() == previous_text
+        assert window.document.to_dict() == before
+
+
 @pytest.fixture
 def window(app, document, monkeypatch, tmp_path):
     widget = MainWindow(settings=QSettings(str(tmp_path / "gui.ini"), QSettings.Format.IniFormat))

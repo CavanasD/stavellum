@@ -52,6 +52,19 @@ The five instrument SVGs shipped here are original Stavellum line drawings,
 covered by the project license. The logo is stored once at
 `src/stavellum/assets/logo.png`; the application and README share that file.
 
+Font Awesome Free **7.3.1** SVG icons (Solid, Regular and Brands) are bundled
+under **CC BY 4.0**; accompanying non-icon metadata/code is under **MIT**.
+Copyright 2026 Fonticons, Inc. Original attribution comments are retained in
+the SVG archive and embedded project icons. The complete upstream notice is
+in [the bundled license](src/stavellum/assets/fontawesome/LICENSE.txt).
+See [upstream](https://github.com/FortAwesome/Font-Awesome/tree/7.3.1) and
+[the Free license](https://fontawesome.com/license/free).
+`scripts/prepare_fontawesome.py` reproduces the pinned resources from the
+official `@fortawesome/fontawesome-free` npm package; the catalog records
+the package integrity, archive SHA-256 and individual SVG SHA-256 values.
+User-provided Font Awesome Pro libraries are not distributed with Stavellum;
+their original license and attribution continue to apply to their files.
+
 ## Native build tools and external encoder
 
 The Qt SDK, Visual Studio, CMake, Ninja, Qt shader tools and Vulkan-Headers are
