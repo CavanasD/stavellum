@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 
 import pytest
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -22,7 +23,7 @@ from stavellum.models import (
     TrackInfo,
 )
 from stavellum.qt import ensure_app
-from stavellum.render import FrameRenderer
+from stavellum.render import FrameRenderer, logo_opacity
 from stavellum.scene import compile_scene
 
 pytestmark = pytest.mark.integration
@@ -75,6 +76,85 @@ def scene():
 def pixels(frame: QImage) -> bytes:
     assert frame.format() == QImage.Format.Format_RGBA8888
     return bytes(frame.constBits())
+
+
+@pytest.mark.parametrize("mode,times,expected", [
+    ("persistent", [0, 0.5, 1, 6, 6.4, 6.8, 20], [0.8] * 7),
+    ("fade_in", [0, 0.5, 1, 6, 20], [0, 0.4, 0.8, 0.8, 0.8]),
+    ("intro", [0, 0.5, 1, 6, 6.4, 6.8, 20], [0, 0.4, 0.8, 0.8, 0.4, 0, 0]),
+])
+def test_logo_animation_uses_presentation_time_and_ignores_other_animation_settings(
+        mode, times, expected):
+    settings = RenderSettings(logo_enabled=True, logo_display_mode=mode,
+                              intro_delay_seconds=10, overlay_enter_seconds=10,
+                              overlay_exit_seconds=10, announcement_auto_hide=True)
+    assert [logo_opacity(time, settings) for time in times] == pytest.approx(expected)
+    settings.logo_enabled = False
+    assert [logo_opacity(time, settings) for time in times] == [0] * len(times)
+
+
+def test_logo_zero_hold_and_zero_opacity():
+    settings = RenderSettings(logo_enabled=True, logo_display_mode="intro", logo_hold_seconds=0)
+    assert logo_opacity(1, settings) == 0.8
+    assert logo_opacity(1.4, settings) == pytest.approx(0.4)
+    assert logo_opacity(1.8, settings) == 0
+    settings.logo_opacity = 0
+    assert logo_opacity(1, settings) == 0
+
+
+@pytest.mark.parametrize("width,height", [(320, 240), (1920, 1080), (3840, 2160), (480, 800)])
+def test_logo_geometry_preserves_source_aspect_and_frame_margins(scene, width, height):
+    from stavellum.branding import logo_image
+
+    settings = replace(scene.settings, width=width, height=height,
+                       logo_enabled=True, logo_size_ratio=0.25)
+    with FrameRenderer(replace(scene, settings=settings)) as renderer:
+        image, rect, opacity = renderer.logo_overlay(0)
+        source = logo_image(dark=True)
+        assert not image.isNull()
+        assert opacity == 0.8
+        assert rect.width() / rect.height() == pytest.approx(source.width() / source.height())
+        assert max(rect.width(), rect.height()) == pytest.approx(min(width, height) * 0.25)
+        assert width - rect.right() == pytest.approx(min(width, height) * 0.025)
+        assert height - rect.bottom() == pytest.approx(min(width, height) * 0.025)
+        assert QRectF(0, 0, width, height).contains(rect)
+
+
+def test_logo_pixels_are_seekable_cached_and_absent_when_disabled(scene, monkeypatch):
+    from stavellum import render
+
+    calls = []
+    load_image = render.logo_image
+
+    def counted_logo(*, dark=False):
+        calls.append(dark)
+        return load_image(dark=dark)
+
+    monkeypatch.setattr(render, "logo_image", counted_logo)
+    settings = replace(scene.settings, logo_enabled=True, logo_display_mode="intro",
+                       logo_size_ratio=0.2, intro_delay_seconds=10)
+    enabled_scene = replace(scene, settings=settings)
+    with FrameRenderer(enabled_scene) as renderer, FrameRenderer(scene) as disabled:
+        disabled.render_frame(0)
+        assert not calls and disabled._logo is None
+        samples = [0, 0.5, 1, 6.4, 6.8, 20]
+        expected = {time: pixels(renderer.render_frame(time)) for time in samples}
+        assert calls == [True]
+        first_image = renderer._logo[0]
+        for time in reversed(samples):
+            assert pixels(renderer.render_frame(time)) == expected[time]
+        assert renderer._logo[0] is first_image
+        with FrameRenderer(replace(enabled_scene, settings=replace(settings, logo_enabled=False))) as baseline:
+            for time in samples:
+                reference = pixels(baseline.render_frame(time))
+                if time in (0, 6.8, 20):
+                    assert expected[time] == reference
+                else:
+                    assert expected[time] != reference
+        # Streamed export samples must use the same absolute-time state.
+        assert [pixels(image) for _, image in renderer.export_frames([1, 0, 6.8], lambda: False)] == [
+            expected[1], expected[0], expected[6.8]]
+    assert renderer._logo is None
 
 
 def lamp_interior(frame: QImage, rectangle) -> QImage:

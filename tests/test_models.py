@@ -34,6 +34,44 @@ def project_document():
     return ProjectDocument(project, [mapping], audio_path="original.wav", settings=settings, metadata=Metadata("曲名", "副标题", "作曲者", "编曲者"))
 
 
+def test_logo_settings_roundtrip_and_legacy_defaults(tmp_path):
+    document = project_document()
+    assert not document.settings.logo_enabled
+    values = dict(logo_enabled=True, logo_display_mode="intro", logo_size_ratio=0.12,
+                  logo_opacity=0.65, logo_enter_seconds=0.5, logo_hold_seconds=0.0,
+                  logo_exit_seconds=0.4)
+    for name, value in values.items():
+        setattr(document.settings, name, value)
+    document.validate()
+    filename = tmp_path / "logo.stproj"
+    save_document(document, filename)
+    restored = load_document(filename)
+    assert restored.settings == document.settings
+    assert restored.schema_version == 1
+    payload = document.to_dict()
+    for name in values:
+        del payload["settings"][name]
+    legacy = ProjectDocument.from_dict(payload)
+    assert {name: getattr(legacy.settings, name) for name in values} == {
+        name: getattr(RenderSettings(), name) for name in values}
+
+
+@pytest.mark.parametrize("name,value", [
+    ("logo_enabled", 1), ("logo_display_mode", "loop"),
+    ("logo_size_ratio", 0.019), ("logo_size_ratio", 0.251),
+    ("logo_opacity", -0.01), ("logo_opacity", 1.01),
+    ("logo_enter_seconds", 0), ("logo_exit_seconds", -1), ("logo_hold_seconds", -1),
+    *[(name, value) for name in ("logo_size_ratio", "logo_opacity", "logo_enter_seconds",
+                                "logo_hold_seconds", "logo_exit_seconds")
+      for value in (math.inf, math.nan)],
+])
+def test_logo_settings_reject_invalid_values_even_when_disabled(name, value):
+    settings = RenderSettings()
+    setattr(settings, name, value)
+    with pytest.raises(ValueError):
+        settings.validate()
+
+
 def test_roundtrip_preserves_settings_mapping_metadata_and_exact_raw_timing(tmp_path):
     document = project_document()
     document.project.tracks[0].color = "#4080c0"

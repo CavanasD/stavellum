@@ -88,6 +88,27 @@ def test_assets_are_reused_without_mutating_scene_or_rasterizing_output(rhi_scen
     assert rhi_scene.settings == settings
 
 
+def test_logo_texture_geometry_opacity_order_and_reuse(rhi_scene, fake_native):
+    settings = replace(rhi_scene.settings, logo_enabled=True, logo_display_mode="intro")
+    scene = replace(rhi_scene, settings=settings)
+    with RhiFrameRenderer(scene) as renderer:
+        assert renderer._assets._logo is None
+        renderer.commands(0)
+        assert renderer._assets._logo is None
+        first = renderer.commands(1)
+        image, rect, opacity = renderer._assets.logo_overlay(1)
+        key = image.cacheKey()
+        quad = first[-1]
+        assert quad.texture_id == key
+        assert (quad.x, quad.y, quad.w, quad.h) == pytest.approx(rect.getRect())
+        assert (quad.r, quad.g, quad.b, quad.a) == pytest.approx((opacity,) * 4)
+        half = renderer.commands(6.4)[-1]
+        assert half.texture_id == key and half.a == pytest.approx(0.4)
+        assert all(q.texture_id != key for q in renderer.commands(6.8))
+        assert renderer.commands(1)[-1].texture_id == key
+    assert renderer._assets._logo is None
+
+
 def test_stream_order_cancel_early_close_restart_and_owned_images(rhi_scene, fake_native):
     renderer = RhiFrameRenderer(rhi_scene)
     stream = renderer.export_frames([2, 0, 1], lambda: False)
@@ -288,6 +309,34 @@ for api in ("vulkan",):
                     assert delta<=2,(api,velocity,time,part_id,delta)
             for time in reversed(samples):
                 assert pixels(renderer,time)==expected[time]
+    document=rendered_document()
+    document.settings.logo_enabled=True
+    document.settings.logo_size_ratio=.2
+    scene=compile_scene(document)
+    for mode in ("persistent","fade_in","intro"):
+        timed=replace(scene,settings=replace(scene.settings,logo_display_mode=mode))
+        with RhiFrameRenderer(timed,api) as renderer, FrameRenderer(timed) as cpu:
+            samples=[0,.5,1,6.4,6.8]
+            expected={t:pixels(renderer,t) for t in samples}
+            for t in samples:
+                actual_frame=renderer.render_frame(t)
+                reference_frame=cpu.render_frame(t)
+                crop=actual_frame.rect().adjusted(540,260,-5,-5)
+                actual_image=actual_frame.copy(crop)
+                wanted_image=reference_frame.copy(crop)
+                actual=bytes(actual_image.constBits())
+                wanted=bytes(wanted_image.constBits())
+                differences=[abs(a-b) for a,b in zip(actual,wanted)]
+                assert sum(differences)/len(differences)<=2,(mode,t,"mean",sum(differences)/len(differences))
+                assert max(differences)<=32,(mode,t,"max",max(differences))
+            for t in reversed(samples):
+                assert pixels(renderer,t)==expected[t]
+            with FrameRenderer(replace(timed,settings=replace(timed.settings,render_backend="gpu"))) as exported:
+                actual=[]
+                for _,image in exported.export_frames([1,0,6.8],lambda:False):
+                    converted=image.convertToFormat(QImage.Format.Format_RGBA8888)
+                    actual.append(bytes(converted.constBits()))
+                assert actual==[expected[1],expected[0],expected[6.8]]
 print(json.dumps(reports),flush=True)
 '''
 

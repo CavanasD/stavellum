@@ -11,10 +11,11 @@ from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtSvg import QSvgRenderer
 
+from .branding import logo_image
 from .gpu import GpuBackendError
 from .icons import draw_image_icon, resolve_icon
 from .layout import FrameLayout, ease
@@ -129,6 +130,21 @@ def activity_lamp_color(part: ScenePart, time: float) -> QColor | None:
     return color
 
 
+def logo_opacity(time: float, settings: RenderSettings) -> float:
+    """Absolute presentation-time logo state, independent of playback history."""
+    if not settings.logo_enabled:
+        return 0.0
+    opacity = settings.logo_opacity
+    if settings.logo_display_mode != "persistent":
+        opacity *= ease(time / settings.logo_enter_seconds)
+    if settings.logo_display_mode == "intro":
+        if time >= settings.logo_enter_seconds + settings.logo_hold_seconds + settings.logo_exit_seconds:
+            return 0.0
+        opacity *= 1 - ease((time - settings.logo_enter_seconds - settings.logo_hold_seconds)
+                           / settings.logo_exit_seconds)
+    return max(0.0, min(settings.logo_opacity, opacity))
+
+
 class RasterFrameRenderer:
     """CPU raster composition and cached assets shared by the Vulkan compositor."""
 
@@ -184,6 +200,7 @@ class RasterFrameRenderer:
         self._gpu_icons: dict[str, QImage] = {}
         self._gpu_tempo: QImage | None = None
         self._octave_labels: dict[str, QImage] = {}
+        self._logo: tuple[QImage, QRectF] | None = None
         self.cache_bytes = 0
         self.cache_peak_bytes = 0
         self.cache_limit = scene.settings.cache_megabytes * 1024 * 1024
@@ -232,6 +249,7 @@ class RasterFrameRenderer:
         self._gpu_icons.clear()
         self._gpu_tempo = None
         self._octave_labels.clear()
+        self._logo = None
         self.cache_bytes = 0
         self._closed = True
 
@@ -435,6 +453,36 @@ class RasterFrameRenderer:
             self._paint_score(painter, time, layout, world_x, plan)
         self._draw_metadata(painter, time)
         self._draw_tempo(painter, time, layout)
+        overlay = self.logo_overlay(time)
+        if overlay is not None:
+            image, rect, opacity = overlay
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.setOpacity(opacity)
+            painter.drawImage(rect, image)
+            painter.restore()
+
+    def logo_overlay(self, time: float) -> tuple[QImage, QRectF, float] | None:
+        """Share one raster asset and screen-space geometry with the GPU compositor."""
+        s = self.scene.settings
+        opacity = logo_opacity(time, s)
+        if opacity <= 0:
+            return None
+        if self._logo is None:
+            source = logo_image(dark=True)  # Both compositors use a black canvas.
+            if source.isNull():
+                return None
+            short_side = min(s.width, s.height)
+            scale = short_side * s.logo_size_ratio / max(source.width(), source.height())
+            width, height = source.width() * scale, source.height() * scale
+            margin = short_side * 0.025
+            rect = QRectF(s.width - margin - width, s.height - margin - height, width, height)
+            image = source.scaled(QSize(math.ceil(width), math.ceil(height)),
+                                  Qt.AspectRatioMode.IgnoreAspectRatio,
+                                  Qt.TransformationMode.SmoothTransformation)
+            self._logo = image, rect
+        image, rect = self._logo
+        return image, rect, opacity
 
     def _paint_score(self, painter: QPainter, time: float, layout: FrameLayout,
                      world_x: float, plan: TilePlan) -> None:

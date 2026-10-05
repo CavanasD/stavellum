@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__
-from .branding import APPLICATION_DESCRIPTION, application_icon, logo_pixmap
+from .branding import APPLICATION_DESCRIPTION, bind_application_icon, logo_pixmap
 
 
 class RecentProjects:
@@ -197,7 +197,7 @@ class WelcomePage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.WindowType.Window)
         self.setWindowTitle("欢迎 · Stavellum")
-        self.setWindowIcon(application_icon())
+        bind_application_icon(self)
         self.resize(1000, 700)
         self._allow_close = False
         self._busy = False

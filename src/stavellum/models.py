@@ -260,6 +260,13 @@ class RenderSettings:
     overlay_exit_seconds: float = 0.8
     announcement_auto_hide: bool = False
     announcement_hold_seconds: float = 5.0
+    logo_enabled: bool = False
+    logo_display_mode: str = "persistent"
+    logo_size_ratio: float = 0.09
+    logo_opacity: float = 0.8
+    logo_enter_seconds: float = 1.0
+    logo_hold_seconds: float = 5.0
+    logo_exit_seconds: float = 0.8
     cache_megabytes: int = 64
     crf: int = 18
     preset: str = "medium"
@@ -311,6 +318,16 @@ class RenderSettings:
             raise ValueError("动画后最短稳定时间必须为非负数。")
         if min(self.intro_delay_seconds, self.announcement_hold_seconds) < 0:
             raise ValueError("开场停顿和文字停留时间必须为非负数。")
+        if self.logo_display_mode not in ("persistent", "fade_in", "intro"):
+            raise ValueError("Logo 显示方式无效。")
+        if not 0.02 <= self.logo_size_ratio <= 0.25:
+            raise ValueError("Logo 大小比例必须位于 0.02 到 0.25。")
+        if not 0 <= self.logo_opacity <= 1:
+            raise ValueError("Logo 不透明度必须位于 0 到 1。")
+        if min(self.logo_enter_seconds, self.logo_exit_seconds) <= 0:
+            raise ValueError("Logo 淡入和淡出时长必须为正数。")
+        if self.logo_hold_seconds < 0:
+            raise ValueError("Logo 停留时间必须为非负数。")
         if not 0 <= self.title_x <= 1 or not 0 <= self.title_y <= 1:
             raise ValueError("标题位置必须位于画面内。")
         if min(self.title_font_size, self.subtitle_font_size, self.credits_font_size) <= 0:

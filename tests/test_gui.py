@@ -511,6 +511,47 @@ def test_intro_and_overlay_settings_persist_and_enable_relevant_hold_fields(wind
     assert window.announcement_auto_hide.isChecked()
 
 
+def test_logo_controls_modes_presets_and_persistence(window, tmp_path):
+    controls = window.settings_controls
+    names = ("logo_size_ratio", "logo_opacity", "logo_enter_seconds",
+             "logo_hold_seconds", "logo_exit_seconds")
+    assert not window.logo_enabled.isChecked()
+    assert not window.logo_display_mode.isEnabled()
+    assert all(not controls[name].isEnabled() for name in names)
+    window.logo_enabled.setChecked(True)
+    assert window.logo_display_mode.isEnabled()
+    assert controls["logo_size_ratio"].isEnabled() and controls["logo_opacity"].isEnabled()
+    assert all(not controls[name].isEnabled() for name in names[2:])
+    window.logo_display_mode.setCurrentIndex(window.logo_display_mode.findData("fade_in"))
+    assert controls["logo_enter_seconds"].isEnabled()
+    assert not controls["logo_hold_seconds"].isEnabled()
+    assert not controls["logo_exit_seconds"].isEnabled()
+    window.logo_display_mode.setCurrentIndex(window.logo_display_mode.findData("intro"))
+    assert all(controls[name].isEnabled() for name in names)
+    values = (0.12, 0.65, 0.5, 0.0, 0.4)
+    for name, value in zip(names, values, strict=True):
+        controls[name].setValue(value)
+    window.animation_preset.setCurrentIndex(window.animation_preset.findData("slow"))
+    assert tuple(controls[name].value() for name in names) == values
+    assert "设置已修改" in window.preview_status.text()
+    window.project_path = str(tmp_path / "logo.stproj")
+    assert window.save_project()
+    restored = load_document(window.project_path)
+    assert restored.settings.logo_enabled
+    assert restored.settings.logo_display_mode == "intro"
+    assert tuple(getattr(restored.settings, name) for name in names) == values
+    window.set_document(restored)
+    assert window.logo_enabled.isChecked()
+    assert window.logo_display_mode.currentData() == "intro"
+    assert all(controls[name].isEnabled() for name in names)
+    assert tuple(controls[name].value() for name in names) == values
+    assert not window._dirty
+    controls["logo_enter_seconds"].setValue(0.75)
+    assert window.animation_preset.currentData() == "slow"
+    window.logo_enabled.setChecked(False)
+    assert all(not controls[name].isEnabled() for name in names)
+
+
 def test_invalid_mapping_does_not_modify_document(window):
     original = window.document.to_dict()
     window.part_name.setText("Changed")

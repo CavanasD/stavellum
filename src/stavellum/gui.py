@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
 
 from .audio import AUDIO_FILE_FILTER
 from .background import BackgroundJob, default_demo_directory
-from .branding import application_icon
+from .branding import application_icon, bind_application_icon
 from .icons import icon_thumbnail, resolve_icon
 from .models import (
     ANIMATION_DURATIONS,
@@ -136,7 +136,7 @@ class MainWindow(QMainWindow):
         self._wizard_cancelling = False
         self._compile_after_job = False
         self.setWindowTitle("Stavellum · 五线谱演示")
-        self.setWindowIcon(application_icon())
+        bind_application_icon(self)
         self.resize(1480, 920)
         self.audio_output = QAudioOutput(self)
         self.player = QMediaPlayer(self)
@@ -535,6 +535,31 @@ class MainWindow(QMainWindow):
         self.announcement_auto_hide.toggled.connect(self._overlay_options_changed)
         form.addRow(self.announcement_auto_hide)
         self._overlay_options_changed()
+        self.logo_enabled = QCheckBox("在画面右下角显示软件 Logo")
+        self.logo_enabled.toggled.connect(self._logo_options_changed)
+        form.addRow(self.logo_enabled)
+        self.logo_display_mode = QComboBox()
+        for label, key in (("常驻", "persistent"), ("淡入后常驻", "fade_in"),
+                           ("开场淡入，停留后淡出", "intro")):
+            self.logo_display_mode.addItem(label, key)
+        self.logo_display_mode.currentIndexChanged.connect(self._logo_options_changed)
+        form.addRow("Logo 显示方式", self.logo_display_mode)
+        for key, label, minimum, maximum, step in (
+            ("logo_size_ratio", "Logo 大小（画面短边比例）", 0.02, 0.25, 0.01),
+            ("logo_opacity", "Logo 最大不透明度", 0.0, 1.0, 0.05),
+            ("logo_enter_seconds", "Logo 淡入（秒）", 0.01, 60.0, 0.05),
+            ("logo_hold_seconds", "Logo 停留（秒）", 0.0, 3600.0, 0.1),
+            ("logo_exit_seconds", "Logo 淡出（秒）", 0.01, 60.0, 0.05),
+        ):
+            control = QDoubleSpinBox()
+            control.setDecimals(3)
+            control.setRange(minimum, maximum)
+            control.setSingleStep(step)
+            control.setToolTip("预览与视频共用；从画面零秒计时，独立于报幕和动画速度预设")
+            control.valueChanged.connect(self._mark_dirty)
+            self.settings_controls[key] = control
+            form.addRow(label, control)
+        self._logo_options_changed()
         self.preset = QComboBox()
         self.preset.addItems(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"])
         self.preset.currentIndexChanged.connect(self._mark_dirty)
@@ -587,6 +612,17 @@ class MainWindow(QMainWindow):
         self._dirty = True
         self.preview_status.setText("设置已修改；点击“更新预览”应用")
         self._update_title()
+
+    def _logo_options_changed(self, *args: Any) -> None:
+        enabled = self.logo_enabled.isChecked()
+        mode = self.logo_display_mode.currentData()
+        self.logo_display_mode.setEnabled(enabled)
+        for name in ("logo_size_ratio", "logo_opacity"):
+            self.settings_controls[name].setEnabled(enabled)
+        self.settings_controls["logo_enter_seconds"].setEnabled(enabled and mode != "persistent")
+        for name in ("logo_hold_seconds", "logo_exit_seconds"):
+            self.settings_controls[name].setEnabled(enabled and mode == "intro")
+        self._mark_dirty()
 
     def _update_title(self) -> None:
         name = Path(self.project_path).name if self.project_path else (
@@ -830,6 +866,10 @@ class MainWindow(QMainWindow):
             self.animation_preset.findData(document.settings.animation_preset()))
         self.announcement_auto_hide.setChecked(document.settings.announcement_auto_hide)
         self._overlay_options_changed()
+        self.logo_enabled.setChecked(document.settings.logo_enabled)
+        self.logo_display_mode.setCurrentIndex(
+            self.logo_display_mode.findData(document.settings.logo_display_mode))
+        self._logo_options_changed()
         self.fps.setCurrentText(str(document.settings.fps))
         self.preset.setCurrentText(document.settings.preset)
         self.render_backend.setCurrentIndex(self.render_backend.findData(document.settings.render_backend))
@@ -1225,6 +1265,8 @@ class MainWindow(QMainWindow):
         document.settings.video_encoder = self.video_encoder.currentData()
         document.settings.nvenc_preset = self.nvenc_preset.currentText()
         document.settings.announcement_auto_hide = self.announcement_auto_hide.isChecked()
+        document.settings.logo_enabled = self.logo_enabled.isChecked()
+        document.settings.logo_display_mode = self.logo_display_mode.currentData()
         if validate:
             try:
                 document.validate()

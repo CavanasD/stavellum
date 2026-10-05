@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from PySide6.QtGui import QImage
 from test_render import pixels, rendered_document
@@ -112,3 +114,25 @@ def test_drawing_errors_are_not_hidden_by_auto_fallback(cpu_scene, monkeypatch):
             renderer.render_frame(0)
         assert renderer.fallback_reasons == [] and renderer.frame_count == 0
     cpu_scene.settings.render_backend = "cpu"
+
+
+def test_logo_survives_vulkan_failure_with_cached_image_and_same_absolute_time(cpu_scene, monkeypatch):
+    settings = replace(cpu_scene.settings, render_backend="cpu", logo_enabled=True,
+                       logo_display_mode="intro", logo_size_ratio=0.2)
+    scene = replace(cpu_scene, settings=settings)
+    with FrameRenderer(scene) as reference:
+        expected = pixels(reference.render_frame(6.4))
+
+    class LostRenderer(FakeVulkanRenderer):
+        def _render(self, seconds):
+            super()._render(seconds)
+            self.logo = self.assets._logo[0]
+            raise GpuBackendError("test Vulkan device lost with logo")
+
+    monkeypatch.setattr("stavellum.rhi.RhiFrameRenderer", LostRenderer)
+    with FrameRenderer(replace(scene, settings=replace(settings, render_backend="auto"))) as renderer:
+        gpu = renderer._gpu
+        assert pixels(renderer.render_frame(6.4)) == expected
+        assert renderer.backend == "cpu" and gpu.closed
+        assert renderer._logo[0] is gpu.logo
+        assert pixels(renderer.render_frame(6.4)) == expected

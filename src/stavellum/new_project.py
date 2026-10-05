@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from .audio import AUDIO_FILE_FILTER
-from .branding import application_icon
+from .branding import bind_application_icon
 
 SOURCE_FILE_FILTER = "音乐来源 (*.flp *.mid *.midi);;FL Studio 工程 (*.flp);;MIDI 文件 (*.mid *.midi)"
 SOURCE_SUFFIXES = frozenset({".flp", ".mid", ".midi"})
@@ -96,7 +96,7 @@ class ProjectWizard(QWidget):
         super().__init__(parent, Qt.WindowType.Tool)
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setWindowTitle("新工程向导 · Stavellum")
-        self.setWindowIcon(application_icon())
+        bind_application_icon(self)
         self.resize(900, 760)
         self.setObjectName("ProjectWizard")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)

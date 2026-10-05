@@ -285,6 +285,10 @@ class RhiFrameRenderer:
             texture(image, (x - 2 * header_ratio, y - 2 * header_ratio,
                             image.width() * header_ratio, image.height() * header_ratio),
                     1.0, (scene.body_left, top, scene.body_right - scene.body_left, bottom - top))
+        overlay = self._asset(assets.logo_overlay, time)
+        if overlay is not None:
+            image, rect, opacity = overlay
+            texture(image, rect.getRect(), opacity)
         self.command_build_seconds += clock.perf_counter() - started - (self.asset_prepare_seconds - previous_assets)
         return commands
 
