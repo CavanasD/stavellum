@@ -94,6 +94,39 @@ class SceneOctaveSpan:
 
 
 @dataclass(slots=True)
+class PartGeometry:
+    part_id: str
+    source_top: float
+    source_bottom: float
+    staff_centers: list[float]
+
+
+@dataclass(slots=True)
+class EngravingDiagnostic:
+    severity: str
+    code: str
+    body: str
+    part_id: str
+
+
+@dataclass(slots=True)
+class EngravedGeometry:
+    svg: str
+    view_box: tuple[float, float, float, float]
+    beats: list[float]
+    xs: list[float]
+    parts: list[PartGeometry]
+    header_left: float
+    header_right: float
+    measure_bounds: list[tuple[float, float]]
+    element_part_ids: dict[str, str]
+    octave_spans: list[SceneOctaveSpan]
+    terminal_x: float
+    end_beat: float
+    diagnostics: list[EngravingDiagnostic]
+
+
+@dataclass(slots=True)
 class CompiledScene:
     svg: str
     view_box: tuple[float, float, float, float]
@@ -116,6 +149,7 @@ class CompiledScene:
     tempo_mark: TempoMark | None = None
     octave_spans: list[SceneOctaveSpan] = field(default_factory=list)
     icon_assets: dict[str, IconAsset] = field(default_factory=dict)
+    compilation_report: dict = field(default_factory=dict)
 
     @property
     def body_left(self) -> float:
@@ -345,6 +379,8 @@ def _scene_octave_spans(notation, index: dict[str, ET.Element],
 
 def compile_visibility(scene: CompiledScene) -> None:
     """Visibility and zoom share absolute presentation time with the camera."""
+    from .compilation_cache import restore_visibility
+
     glyph = metronome_renderer()
     glyph_width = 360 * glyph.viewBoxF().width() / glyph.viewBoxF().height()
     label = "= " + f"{scene.bpm:.6f}".rstrip("0").rstrip(".")
@@ -357,20 +393,7 @@ def compile_visibility(scene: CompiledScene) -> None:
         scene.camera = compile_camera(scene.axis, scene.bpm, scene.settings.score_start_in_audio_sec,
                                       (right - left) / (2 * scene.scale))
     scene.layout = compile_layout(scene)
-    for part in scene.parts:
-        part.opacity_curve = scene.layout.opacities[part.part_id]
-        part.opacity_keys = scene.layout.opacity_keys_for(part.part_id)
-        part.spans = []
-        opened = None
-        for (start, first), (end, last) in zip(part.opacity_keys, part.opacity_keys[1:]):
-            if opened is None and (first > 0 or last > 0):
-                opened = start
-            if opened is not None and first > 0 and last == 0:
-                part.spans.append(VisibleSpan(opened, start, opened == 0.0))
-                opened = None
-        if opened is not None or part.opacity_keys[-1][1] > 0:
-            start = opened if opened is not None else 0.0
-            part.spans.append(VisibleSpan(start, 1e12, start == 0.0))
+    restore_visibility(scene)
 
 
 def _axis_from_anchors(notes: dict[float, float], synthetic: dict[float, float]) -> TimeAxis:
@@ -398,14 +421,9 @@ def _axis_from_anchors(notes: dict[float, float], synthetic: dict[float, float])
     return TimeAxis([beat for beat, _ in ordered], [x for _, x in ordered])
 
 
-def compile_scene(document: ProjectDocument) -> CompiledScene:
+def _engrave_geometry(document: ProjectDocument) -> EngravedGeometry:
     from .notation import build_notation
 
-    document.validate()
-    ensure_app()
-    for mapping in document.mappings:
-        if mapping.enabled:
-            resolve_icon(mapping.icon, document.icon_assets)
     notation = build_notation(document)
     svg = normalize_svg(notation.display_svg)
     root = ET.fromstring(svg)
@@ -516,46 +534,157 @@ def compile_scene(document: ProjectDocument) -> CompiledScene:
     synthetic[final_beat] = max(bar_ends[-1], max(points.values(), default=header_right) + 180)
     axis = _axis_from_anchors(points, synthetic)
 
-    mappings = {m.part_id: m for m in document.mappings if m.enabled}
     groups: dict[str, list[int]] = {}
     for i, part_id in enumerate(notation.staff_part_ids):
         groups.setdefault(part_id, []).append(i)
     parts = []
-    offset = document.settings.score_start_in_audio_sec
-    tick_seconds = 60 / document.project.bpm / document.project.ppq
     for part_id, staff_indices in groups.items():
-        m = mappings[part_id]
-        selected = [n for n in document.project.notes if n.track_id in m.track_ids and n.pitch not in m.keyswitches]
-        events = [ActiveNote(n.start_tick * tick_seconds + offset, n.end_tick * tick_seconds + offset, n.velocity) for n in selected]
         content_top = min(staff_rects[i].top() for i in staff_indices)
         content_bottom = max(staff_rects[i].bottom() for i in staff_indices)
         # Padding is source-space and scales with the engraved glyphs.
+        parts.append(PartGeometry(
+            part_id, content_top - 100, content_bottom + 100,
+            [centers[i] for i in staff_indices],
+        ))
+    terminal_bounds = [_bounds(renderer, element) for element in measures[-1]
+                       if "barLine" in _classes(element)]
+    terminal_x = max((bounds.right() for bounds in terminal_bounds if not bounds.isEmpty()),
+                     default=bar_ends[-1])
+    # Import diagnostics belong to the current document, not the cached engraving.
+    names = {m.part_id: m.name for m in document.mappings}
+    diagnostics = []
+    for item in notation.diagnostics[len(document.project.diagnostics):]:
+        prefix = names[item.track_id] + "："
+        if not item.message.startswith(prefix):
+            raise ValueError("记谱诊断缺少声部名称前缀。")
+        diagnostics.append(EngravingDiagnostic(item.severity, item.code,
+                                               item.message[len(prefix):], item.track_id))
+    return EngravedGeometry(
+        ET.tostring(root, encoding="unicode"), tuple(renderer.viewBoxF().getRect()),
+        axis.beats, axis.xs, parts, header_left, header_right, measure_bounds, owners,
+        octave_spans, terminal_x,
+        max((e.end_beat for e in notation.quantized_events), default=0), diagnostics,
+    )
+
+
+def _assemble_scene(document: ProjectDocument, geometry: EngravedGeometry) -> CompiledScene:
+    mappings = {m.part_id: m for m in document.mappings if m.enabled}
+    offset = document.settings.score_start_in_audio_sec
+    tick_seconds = 60 / document.project.bpm / document.project.ppq
+    parts = []
+    for part in geometry.parts:
+        mapping = mappings[part.part_id]
+        notes = [ActiveNote(n.start_tick * tick_seconds + offset,
+                            n.end_tick * tick_seconds + offset, n.velocity)
+                 for n in document.project.notes
+                 if n.track_id in mapping.track_ids and n.pitch not in mapping.keyswitches]
         parts.append(ScenePart(
-            part_id, m.name, (m.icon or m.instrument) if m.use_icon and m.icon != "none" else "",
-            content_top - 100, content_bottom + 100,
-            [centers[i] for i in staff_indices], events,
-            activity_color=activity_color(document.project, m),
+            part.part_id, mapping.name,
+            (mapping.icon or mapping.instrument) if mapping.use_icon and mapping.icon != "none" else "",
+            part.source_top, part.source_bottom, list(part.staff_centers), notes,
+            activity_color=activity_color(document.project, mapping),
         ))
     # Whole-song extents can overlap when ledger lines occur in different bars.
     # Keep each extent intact; renderers filter other instruments by identity.
     s = replace(document.settings)
     default_scale = (12 / 180) * (s.height / 1080) * s.staff_scale
-    header_scale = (s.header_width * s.width - 20 * s.width / 1920) / (header_right - header_left)
+    header_scale = (s.header_width * s.width - 20 * s.width / 1920) / (geometry.header_right - geometry.header_left)
     # Upper zoom limit for layout and fixed assets; body tiles independently
     # choose a discrete raster level that covers their current display scale.
     scale = min(2 * default_scale, header_scale)
-    score_duration = max(document.project.duration_seconds, max((e.end_beat for e in notation.quantized_events), default=0) * 60 / document.project.bpm)
-    svg = ET.tostring(root, encoding="unicode")
-    scene = CompiledScene(svg, tuple(renderer.viewBoxF().getRect()), axis, parts, s, replace(document.metadata), document.project.bpm, bar_beats, score_duration, scale, header_left, header_right, list(notation.diagnostics), measure_bounds, owners)
+    score_duration = max(document.project.duration_seconds, geometry.end_beat * 60 / document.project.bpm)
+    diagnostics = [replace(item) for item in document.project.diagnostics]
+    diagnostics.extend(Diagnostic(item.severity, item.code,
+                                  mappings[item.part_id].name + "：" + item.body, item.part_id)
+                       for item in geometry.diagnostics)
+    scene = CompiledScene(
+        geometry.svg, geometry.view_box, TimeAxis(list(geometry.beats), list(geometry.xs)),
+        parts, s, replace(document.metadata), document.project.bpm, document.project.bar_beats,
+        score_duration, scale, geometry.header_left, geometry.header_right, diagnostics,
+        list(geometry.measure_bounds), dict(geometry.element_part_ids),
+    )
     scene.icon_assets = {digest: replace(asset) for digest, asset in document.icon_assets.items()
                          if any(part.icon == f"asset:{digest}" for part in parts)}
-    scene.octave_spans = octave_spans
-    terminal_bounds = [_bounds(renderer, element) for element in measures[-1]
-                       if "barLine" in _classes(element)]
-    scene.terminal_x = max((bounds.right() for bounds in terminal_bounds if not bounds.isEmpty()),
-                          default=bar_ends[-1])
-    compile_visibility(scene)
+    scene.octave_spans = list(geometry.octave_spans)
+    scene.terminal_x = geometry.terminal_x
+    return scene
+
+
+def compile_scene(document: ProjectDocument, *, use_cache: bool = True,
+                  force_rebuild: bool = False, progress=None, cancel=None) -> CompiledScene:
+    """Restore independent engraving and timeline layers, then bind current display data."""
+    import time
+
+    from .compilation_cache import (
+        CompilationCache,
+        decode_geometry,
+        decode_timeline,
+        encode_timeline,
+        geometry_key,
+        restore_visibility,
+        timeline_key,
+    )
+
+    started = time.perf_counter()
+    cancelled = cancel or (lambda: False)
+
+    def report(fraction, message):
+        if cancelled():
+            raise InterruptedError("已取消谱面编译。")
+        if progress:
+            progress(fraction, message)
+
+    report(0.0, "正在准备预览…")
+    document.validate()
+    ensure_app()
+    for mapping in document.mappings:
+        if mapping.enabled:
+            resolve_icon(mapping.icon, document.icon_assets)
+    cache = CompilationCache() if use_cache else None
+    key = geometry_key(document) if cache else ""
+    geometry = None
+    lookup_started = time.perf_counter()
+    if cache and not force_rebuild:
+        report(0.05, "正在读取已有谱面…")
+        geometry = cache.read("geometry", key, lambda data: decode_geometry(data, document))
+    geometry_hit = geometry is not None
+    lookup_seconds = time.perf_counter() - lookup_started
+    engraving_started = time.perf_counter()
+    if geometry is None:
+        report(0.1, "正在重新制谱…")
+        geometry = _engrave_geometry(document)
+        report(0.5, "谱面已生成…")
+        if cache:
+            from dataclasses import asdict
+
+            cache.write("geometry", key, asdict(geometry), cancelled)
+    engraving_seconds = time.perf_counter() - engraving_started if not geometry_hit else 0.0
+    scene = _assemble_scene(document, geometry)
+    time_key = timeline_key(key, document.settings) if cache else ""
+    timeline = None
+    lookup_started = time.perf_counter()
+    if cache and not force_rebuild:
+        timeline = cache.read("timeline", time_key, lambda data: decode_timeline(data, scene))
+    lookup_seconds += time.perf_counter() - lookup_started
+    timeline_hit = timeline is not None
+    timeline_started = time.perf_counter()
+    if timeline is None:
+        report(0.6, "正在更新动画布局…")
+        compile_visibility(scene)
+        report(0.9, "动画布局已更新…")
+        if cache:
+            cache.write("timeline", time_key, encode_timeline(scene), cancelled)
+    else:
+        scene.layout, scene.camera, scene.tempo_mark = timeline
+        restore_visibility(scene)
+    timeline_seconds = time.perf_counter() - timeline_started if not timeline_hit else 0.0
     minimum_scale = min(key.scale for key in scene.layout.keyframes)
-    if minimum_scale * 180 < 6 * s.height / 1080:
+    if minimum_scale * 180 < 6 * scene.settings.height / 1080:
         scene.diagnostics.append(Diagnostic("warning", "DENSE_LAYOUT", "同时显示的谱表较多，建议减少乐器或增加谱区高度。"))
+    report(1.0, "已复用谱面与动画布局" if geometry_hit and timeline_hit else "预览编译完成")
+    scene.compilation_report = {
+        "geometry_cache_hit": geometry_hit, "timeline_cache_hit": timeline_hit,
+        "cache_lookup_seconds": lookup_seconds, "engraving_seconds": engraving_seconds,
+        "timeline_seconds": timeline_seconds, "total_compile_seconds": time.perf_counter() - started,
+    }
     return scene

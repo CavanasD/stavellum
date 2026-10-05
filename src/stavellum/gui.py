@@ -123,6 +123,8 @@ class MainWindow(QMainWindow):
         self.project_path = ""
         self.renderer: Any = None
         self._scene: Any = None
+        self._applied_preview_key = ""
+        self._pending_preview_key = ""
         self._job: BackgroundJob | None = None
         self._export_dialog: ExportProgressDialog | None = None
         self._dirty = False
@@ -201,6 +203,13 @@ class MainWindow(QMainWindow):
         self.export_parts_action.triggered.connect(self._export_parts)
         export_menu.addAction(self.export_video_action)
         export_menu.addAction(self.export_parts_action)
+        preview_menu = self.menuBar().addMenu("预览")
+        self.rebuild_action = QAction("强制重新制谱", self)
+        self.rebuild_action.triggered.connect(lambda: self.compile_preview(force_rebuild=True))
+        self.clear_cache_action = QAction("清除制谱缓存", self)
+        self.clear_cache_action.triggered.connect(self._clear_compilation_cache)
+        preview_menu.addAction(self.rebuild_action)
+        preview_menu.addAction(self.clear_cache_action)
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -693,8 +702,10 @@ class MainWindow(QMainWindow):
         busy = self._job is not None
         has_document = self.document is not None
         for control in (self.audio_action, self.compile_button, self.export_video_action,
-                        self.export_parts_action, self.save_action, self.save_as_action):
+                        self.export_parts_action, self.save_action, self.save_as_action,
+                        self.rebuild_action):
             control.setEnabled(has_document and not busy)
+        self.clear_cache_action.setEnabled(not busy)
         for control in (self.open_action, self.demo_action, self.new_action,
                         self.welcome_action):
             control.setEnabled(not busy)
@@ -903,6 +914,8 @@ class MainWindow(QMainWindow):
         self._loading = True
         self._part_index = -1
         self._scene = None
+        self._applied_preview_key = ""
+        self._pending_preview_key = ""
         self.preview.set_frame(QImage())
         project = document.project
         self.source_label.setText(
@@ -1363,25 +1376,51 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"项目已保存：{path}", 6000)
         return True
 
-    def compile_preview(self, checked: bool = False) -> None:
+    def compile_preview(self, checked: bool = False, *, force_rebuild: bool = False) -> None:
+        from .compilation_cache import preview_key
+
         if self._closing or self._job is not None or not self._gather_document():
             return
+        key = preview_key(self.document)
+        if not force_rebuild and self.renderer is not None and key == self._applied_preview_key:
+            self._show_renderer_status(force=True)
+            return
         self.pause_playback()
-        self.preview_status.setText("正在制谱…")
-        self._start_job("compile", copy.deepcopy(self.document), self._compiled)
+        self._pending_preview_key = key
+        self.preview_status.setText("正在准备预览…")
+        document = copy.deepcopy(self.document)
+        payload = (document, {"force_rebuild": True}) if force_rebuild else document
+        self._start_job("compile", payload, self._compiled)
+
+    def _clear_compilation_cache(self) -> None:
+        from .compilation_cache import CompilationCache
+
+        if self._job is not None:
+            return
+        cleared = CompilationCache().clear()
+        self.statusBar().showMessage("制谱缓存已清除" if cleared else "部分缓存无法清除", 6000)
 
     def _compiled(self, scene: Any) -> None:
         from .render import FrameRenderer
 
+        renderer = FrameRenderer(scene)
+        position = min(self._position, scene.settings.presentation_duration(
+            self.player.duration() / 1000, scene.score_duration))
+        try:
+            frame = renderer.render_frame(position)
+        except Exception:
+            renderer.close()
+            raise
         self._close_renderer()
         self._scene = scene
-        self.renderer = FrameRenderer(scene)
+        self.renderer = renderer
+        self._applied_preview_key = self._pending_preview_key
         self.timer.setInterval(max(1, round(1000 / scene.settings.fps)))
-        self._position = min(self._position, self._duration())
+        self._position = position
         self._show_diagnostics(getattr(scene, "diagnostics", []))
         self._show_renderer_status(force=True)
         self._update_transport()
-        self._render_position()
+        self.preview.set_frame(frame)
 
     def _export_video(self) -> None:
         if not self._gather_document():
@@ -1428,7 +1467,7 @@ class MainWindow(QMainWindow):
         job.finished.connect(self._job_finished)
         self._set_job_progress(0)
         self._set_job_message({"load": "正在打开项目…", "import": "正在读取来源…",
-                                "demo": "正在生成示例…", "compile": "正在制谱…",
+                                "demo": "正在生成示例…", "compile": "正在准备预览…",
                                 "parts": "正在导出分谱…", "video": "正在逐帧导出视频…"}[operation])
         if operation in {"video", "parts"}:
             if self._export_dialog:
@@ -1467,6 +1506,8 @@ class MainWindow(QMainWindow):
         self._set_job_progress(round(fraction * 1000))
         if message:
             self._set_job_message(message)
+            if self._job and self._job.operation == "compile":
+                self.preview_status.setText(message)
 
     def _job_detail(self, detail: ExportProgress) -> None:
         if (not self._job or self._job.operation not in {"video", "parts"}
@@ -1481,6 +1522,8 @@ class MainWindow(QMainWindow):
 
     def _job_cancelled(self) -> None:
         self._set_job_message("任务已取消")
+        if self._job and self._job.operation == "compile":
+            self.preview_status.setText("预览更新已取消；原预览已保留" if self.renderer else "预览更新已取消")
         if self._wizard_importing:
             self._wizard_cancelling = True
         if self._job and self._job.operation in {"video", "parts"} and self._export_dialog:

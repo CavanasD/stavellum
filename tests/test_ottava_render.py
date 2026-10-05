@@ -86,7 +86,7 @@ def octave_scene(monkeypatch):
                                          element_part_ids=notation._element_owners(mei, staff_ids),
                                          octave_spans=[span], mei=mei)
         monkeypatch.setattr(notation, "build_notation", lambda _document: result)
-        return compile_scene(document)
+        return compile_scene(document, use_cache=False)
     return build
 
 

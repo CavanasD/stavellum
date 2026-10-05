@@ -191,30 +191,33 @@ def window(app, document, monkeypatch, tmp_path):
 
 
 def test_file_and_export_menus_follow_document_and_worker_state(window):
-    file_menu, export_menu = [action.menu() for action in window.menuBar().actions()]
-    assert (file_menu.title(), export_menu.title()) == ("文件", "导出")
+    file_menu, export_menu, preview_menu = [action.menu() for action in window.menuBar().actions()]
+    assert (file_menu.title(), export_menu.title(), preview_menu.title()) == ("文件", "导出", "预览")
     assert [action for action in file_menu.actions() if not action.isSeparator()][:-1] == [
         window.new_action, window.open_action, window.demo_action, window.audio_action,
         window.save_action, window.save_as_action, window.welcome_action,
     ]
     assert export_menu.actions() == [window.export_video_action, window.export_parts_action]
+    assert preview_menu.actions() == [window.rebuild_action, window.clear_cache_action]
     assert window.new_action.shortcut().toString() == "Ctrl+N"
     assert window.open_action.shortcut().toString() == "Ctrl+O"
     assert window.save_action.shortcut().toString() == "Ctrl+S"
     document_actions = (
         window.audio_action, window.save_action, window.save_as_action,
-        window.export_video_action, window.export_parts_action, window.compile_button,
+        window.export_video_action, window.export_parts_action, window.compile_button, window.rebuild_action,
     )
     opening_actions = (window.new_action, window.open_action, window.demo_action, window.welcome_action)
     assert all(action.isEnabled() for action in (*document_actions, *opening_actions))
     window._job = SimpleNamespace(_cancel_requested_at=None)
     window._update_actions()
+    assert not window.clear_cache_action.isEnabled()
     assert all(not action.isEnabled() for action in (*document_actions, *opening_actions))
     window._job._cancel_requested_at = 1
     window._update_actions()
     assert all(not action.isEnabled() for action in (*document_actions, *opening_actions))
     window._job = None
     window._update_actions()
+    assert window.clear_cache_action.isEnabled()
     assert all(action.isEnabled() for action in (*document_actions, *opening_actions))
     window.document = None
     window._update_actions()
@@ -484,6 +487,67 @@ def test_renderer_resources_close_on_replace_project_switch_failure_and_exit(win
     window._dirty = False
     window.close()
     assert final.closed == 1 and window.renderer is None
+
+
+def test_unchanged_preview_keeps_renderer_and_saved_edits_still_update(window, tmp_path, monkeypatch):
+    from stavellum.compilation_cache import preview_key
+    from stavellum.scene import compile_scene
+
+    window.render_backend.setCurrentIndex(window.render_backend.findData("cpu"))
+    assert window._gather_document()
+    window._pending_preview_key = preview_key(window.document)
+    window._compiled(compile_scene(window.document))
+    renderer, compiled = window.renderer, window._scene
+    requests = []
+    monkeypatch.setattr(window, "_start_job", lambda *args: requests.append(args))
+    MainWindow.compile_preview(window)
+    assert not requests
+    assert window.renderer is renderer and window._scene is compiled
+    window.metadata_controls["title"].setText("已保存的新标题")
+    window.project_path = str(tmp_path / "updated.stproj")
+    assert window.save_project() and not window._dirty
+    MainWindow.compile_preview(window)
+    assert len(requests) == 1
+    assert requests[0][1].metadata.title == "已保存的新标题"
+    assert window.renderer is renderer
+    MainWindow.compile_preview(window, force_rebuild=True)
+    assert requests[-1][1][1] == {"force_rebuild": True}
+
+
+@pytest.mark.parametrize("failure", ["initialization", "first-frame"])
+def test_replacement_failure_keeps_previous_preview(window, monkeypatch, failure):
+    from stavellum import render
+
+    image = QImage(320, 240, QImage.Format.Format_RGBA8888)
+    image.fill(Qt.GlobalColor.black)
+    old = SimpleNamespace(closed=0)
+    old.close = lambda: setattr(old, "closed", old.closed + 1)
+    window.renderer = old
+    window._scene = "previous-scene"
+    window._applied_preview_key = "previous-key"
+    window.preview.set_frame(image)
+    candidates = []
+
+    class FailedRenderer:
+        def __init__(self, scene):
+            if failure == "initialization":
+                raise RuntimeError("initialization")
+            self.closed = 0
+            candidates.append(self)
+
+        def render_frame(self, time):
+            raise RuntimeError("first-frame")
+
+        def close(self):
+            self.closed += 1
+
+    monkeypatch.setattr(render, "FrameRenderer", FailedRenderer)
+    incoming = SimpleNamespace(settings=window.document.settings, score_duration=1)
+    with pytest.raises(RuntimeError, match=failure):
+        window._compiled(incoming)
+    assert window.renderer is old and old.closed == 0
+    assert window._scene == "previous-scene" and window._applied_preview_key == "previous-key"
+    assert all(candidate.closed == 1 for candidate in candidates)
 
 
 def test_gui_prepares_vulkan_platform_before_constructing_the_window(monkeypatch):

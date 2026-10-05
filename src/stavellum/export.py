@@ -378,11 +378,15 @@ def export_video(document: ProjectDocument, output_path: str | Path, progress=No
     summary_temporary = temporary.with_suffix(".json")
     log_temporary = temporary.with_suffix(".log")
     log_path = target.with_suffix(".render.log")
-    report(0.0, "正在刻谱和计算动画…")
-    detail.emit("compile", "正在刻谱和计算动画…", force=True)
+    report(0.0, "正在准备谱面与动画…")
+    detail.emit("compile", "正在准备谱面与动画…", force=True)
     prepare_render_app(document.settings)
     compile_started = time.perf_counter()
-    scene = compile_scene(document)
+    def compile_progress(fraction, message):
+        report(fraction * .04, message)
+        detail.emit("compile", message, force=True)
+
+    scene = compile_scene(document, progress=compile_progress, cancel=cancelled)
     compile_seconds = time.perf_counter() - compile_started
     if cancelled():
         raise InterruptedError("已取消导出。")
@@ -442,6 +446,7 @@ def export_video(document: ProjectDocument, output_path: str | Path, progress=No
             "wall_seconds": round(time.perf_counter() - loop_started, 3),
             "total_wall_seconds": round(time.perf_counter() - total_started, 3),
             "compile_seconds": compile_seconds,
+            "compilation": getattr(scene, "compilation_report", {}),
             "video_encoder": selected_encoder, "requested_video_encoder": settings.video_encoder,
             "encoder_parameters": ({"cq": settings.nvenc_cq, "preset": settings.nvenc_preset}
                                    if selected_encoder == "h264_nvenc"

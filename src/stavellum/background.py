@@ -38,8 +38,8 @@ def _worker(operation: str, payload: Any, messages: Any, cancelled: Any) -> None
         if operation == "compile":
             from .scene import compile_scene
 
-            progress(0.05, "正在制谱与建立滚动时间表…")
-            result = compile_scene(payload)
+            document, options = payload if isinstance(payload, tuple) else (payload, {})
+            result = compile_scene(document, progress=progress, cancel=cancelled.is_set, **options)
         elif operation == "import":
             from .importers import import_project
 

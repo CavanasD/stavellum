@@ -102,7 +102,7 @@ def encoding_job(tmp_path, monkeypatch):
     state = SimpleNamespace(document=document, encoders=[], times=[], children=[],
                             failure="hardware", corrupt_audio=False, invalid_output=False, renderers=[])
 
-    def compile_score(doc):
+    def compile_score(doc, **kwargs):
         return SimpleNamespace(settings=deepcopy(doc.settings), score_duration=.5, diagnostics=[],
                                scale=1, camera=SimpleNamespace(half_window_seconds=0,
                                                              certified_drift_source=0),
