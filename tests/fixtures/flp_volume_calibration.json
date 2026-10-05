@@ -1,0 +1,672 @@
+{
+  "schema": 1,
+  "fl_version": "26.1.1.5547",
+  "ppq": 96,
+  "bpm": 120,
+  "calibrated_on": "2026-10-04",
+  "provenance": {
+    "isolated_project": true,
+    "private_projects_used": false,
+    "generation_script": "scripts/flp_calibration.py",
+    "public_base": ".cache/importers/public/empty-fl2026-sampleplacement.flp",
+    "public_base_discussion": "https://github.com/demberto/PyFLP/pull/205",
+    "public_base_zip": "https://github.com/user-attachments/files/31938992/empty-fl2025-fl2026.zip",
+    "public_base_contributor": "icedream, 2026-09-08 comment",
+    "template": "Image-Line FL Studio 2026 bundled Data/Templates/Utility/SFX transitions/SFX transitions.flp",
+    "native_ui_steps": [
+      "Render synthetic curves.flp as curves.wav in FL Studio 2026.",
+      "Right-click first right endpoint; Single curve selected natively. Select Hold; Save As hold-native.flp.",
+      "Edit channel 1 volume events, click three levels; Save As pattern-volume-native.flp.",
+      "Edit Mixer insert 1 volume events, click same three levels at interleaved times; Save As pattern-channel-mixer-native.flp.",
+      "Mute old automation Playlist track; place Pattern 1 at tick zero; Save As pattern-hold-playback.flp and render WAV.",
+      "Drag channel 1 volume event editor from low to high; Save As pattern-dense-native.flp."
+    ],
+    "curve_recheck_command": "python scripts/flp_calibration.py --analyze .cache/importers/calibration/curves.wav"
+  },
+  "files": {
+    "curves.flp": {
+      "sha256": "b6e3c15a6e103de3ae1a1cdb5510cceec6a418d7b40c3f8bfb5089f278c56b88",
+      "bytes": 48751
+    },
+    "curves.wav": {
+      "sha256": "0feeac2d4c8e27a3fcc951cd16cd3e56f2b110f1e2ae9fbdd60de5d56024a223",
+      "bytes": 2119740
+    },
+    "constant.wav": {
+      "sha256": "52dd87356c20f0d5f37238cdb267378a4eb7993958e8100d46d06ce8c16067f7",
+      "bytes": 2304044
+    },
+    "hold-native.flp": {
+      "sha256": "076b37ea83037de95f73a4e32e57d82519bfa24a0ced8eee8a9af2268100464c",
+      "bytes": 48758
+    },
+    "pattern-volume-native.flp": {
+      "sha256": "153638a86d7e2c7dc775b55a04d62bf1a5c3fcef49fb7412a325fe46a190252f",
+      "bytes": 48799
+    },
+    "pattern-channel-mixer-native.flp": {
+      "sha256": "e320be4a2ea098937eb31b839bdb0c503d7bcca878296266312c1a99da977075",
+      "bytes": 48835
+    },
+    "pattern-hold-playback.flp": {
+      "sha256": "42176c26862d7121e4c95d4b5b0237f7a18e4e49024b364a6cb181b591b7b44b",
+      "bytes": 48923
+    },
+    "pattern-hold-playback.wav": {
+      "sha256": "6944bcd0a113d5247b514f4d400951bba62960ce6d85ec75dd72a3995137396e",
+      "bytes": 2119740
+    },
+    "pattern-dense-native.flp": {
+      "sha256": "3b1ed0ba4fe42815306432d9c89155330d237791e048761b9f085c5829980517",
+      "bytes": 51168
+    },
+    "pattern-dense-native.png": {
+      "sha256": "7a68614845728ee6b7070af924448d6cd75ee2dd8a327af5f33035317e676f27",
+      "bytes": 165410
+    }
+  },
+  "source_files": {
+    "scripts/flp_calibration.py": {
+      "sha256": "b1c3027aeea2cd3ba7320a768749986a2206075567618987c2ba957125cafa9d",
+      "bytes": 7276
+    },
+    ".cache/importers/public/empty-fl2026-sampleplacement.flp": {
+      "sha256": "241ae83115005e631f11bd99c0f02724f2a5841aab35cbc9c16d36c8c7692554",
+      "bytes": 47499
+    },
+    "Image-Line:Data/Templates/Utility/SFX transitions/SFX transitions.flp": {
+      "sha256": "78b9033e8db9156c09c9f715c0b3cfda395b954b2663f52ba3987fa4f03113c8",
+      "bytes": 62260
+    }
+  },
+  "automation_clip": {
+    "event_id": 234,
+    "points_offset": 21,
+    "point_format": "<ddfI",
+    "metadata_belongs_to": "incoming segment/right endpoint",
+    "original_points": [
+      {
+        "delta_beats": 0.0,
+        "value": 0.25,
+        "tension": 0.0,
+        "metadata": 0
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.75,
+        "tension": 0.24380965530872345,
+        "metadata": 16777216
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.25,
+        "tension": -0.6171427965164185,
+        "metadata": 4278190080
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.75,
+        "tension": 0.0,
+        "metadata": 33554432
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.25,
+        "tension": 0.0,
+        "metadata": 33554438
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.75,
+        "tension": 0.5,
+        "metadata": 16777216
+      }
+    ],
+    "native_hold_points": [
+      {
+        "delta_beats": 0.0,
+        "value": 0.25,
+        "tension": 0.0,
+        "metadata": 0
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.75,
+        "tension": 0.24380965530872345,
+        "metadata": 16777218
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.25,
+        "tension": -0.6171427965164185,
+        "metadata": 4278190080
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.75,
+        "tension": 0.0,
+        "metadata": 33554432
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.25,
+        "tension": 0.0,
+        "metadata": 6
+      },
+      {
+        "delta_beats": 4.0,
+        "value": 0.75,
+        "tension": 0.5,
+        "metadata": 16777216
+      }
+    ],
+    "single_curve": {
+      "mode_low_byte": 0,
+      "formula": "expm1(-log(1000000)*tension*fraction) / expm1(-log(1000000)*tension); tension 0: fraction",
+      "positive_tension": "ease-out",
+      "negative_tension": "ease-in",
+      "cases": [
+        {
+          "start_seconds": 0,
+          "end_seconds": 2,
+          "start_value": 0.25,
+          "end_value": 0.75,
+          "right_point_metadata": 16777216,
+          "right_point_metadata_hex": "0x01000000",
+          "right_point_tension": 0.24380965530872345,
+          "observations": [
+            {
+              "fraction": 0.05,
+              "time_seconds": 0.1,
+              "rms": 930.069255339564,
+              "observed_value": 0.3303109006852279,
+              "formula_value": 0.33026442547787854,
+              "absolute_error": 4.647520734935018e-05
+            },
+            {
+              "fraction": 0.125,
+              "time_seconds": 0.25,
+              "rms": 1378.6026795536714,
+              "observed_value": 0.4279597429914755,
+              "formula_value": 0.4279491911787575,
+              "absolute_error": 1.0551812717973785e-05
+            },
+            {
+              "fraction": 0.25,
+              "time_seconds": 0.5,
+              "rms": 2073.0445232165407,
+              "observed_value": 0.544754055572143,
+              "formula_value": 0.5447480976969059,
+              "absolute_error": 5.957875237050381e-06
+            },
+            {
+              "fraction": 0.375,
+              "time_seconds": 0.75,
+              "rms": 2646.7147717059424,
+              "observed_value": 0.6214068745841994,
+              "formula_value": 0.6214103431022882,
+              "absolute_error": 3.468518088745043e-06
+            },
+            {
+              "fraction": 0.5,
+              "time_seconds": 1.0,
+              "rms": 3084.7532878560605,
+              "observed_value": 0.6717127894895717,
+              "formula_value": 0.671728450058896,
+              "absolute_error": 1.5660569324338347e-05
+            },
+            {
+              "fraction": 0.625,
+              "time_seconds": 1.25,
+              "rms": 3402.6605764998385,
+              "observed_value": 0.7047614937032999,
+              "formula_value": 0.7047552923371014,
+              "absolute_error": 6.201366198443914e-06
+            },
+            {
+              "fraction": 0.75,
+              "time_seconds": 1.5,
+              "rms": 3625.180658880852,
+              "observed_value": 0.7264284404487605,
+              "formula_value": 0.7264328230878129,
+              "absolute_error": 4.382639052336046e-06
+            },
+            {
+              "fraction": 0.875,
+              "time_seconds": 1.75,
+              "rms": 3777.6277290962894,
+              "observed_value": 0.7406481054621369,
+              "formula_value": 0.7406611085378614,
+              "absolute_error": 1.3003075724493662e-05
+            },
+            {
+              "fraction": 0.95,
+              "time_seconds": 1.9,
+              "rms": 3844.393771227652,
+              "observed_value": 0.7467262929452626,
+              "formula_value": 0.7467280393941511,
+              "absolute_error": 1.7464488885066132e-06
+            }
+          ],
+          "max_absolute_error": 4.647520734935018e-05
+        },
+        {
+          "start_seconds": 2,
+          "end_seconds": 4,
+          "start_value": 0.75,
+          "end_value": 0.25,
+          "right_point_metadata": 4278190080,
+          "right_point_metadata_hex": "0xff000000",
+          "right_point_tension": -0.6171427965164185,
+          "observations": [
+            {
+              "fraction": 0.05,
+              "time_seconds": 2.1,
+              "rms": 3879.858608943994,
+              "observed_value": 0.7499192404161572,
+              "formula_value": 0.7499473040747608,
+              "absolute_error": 2.8063658603638686e-05
+            },
+            {
+              "fraction": 0.125,
+              "time_seconds": 2.25,
+              "rms": 3878.8582258255356,
+              "observed_value": 0.7498295088231233,
+              "formula_value": 0.7498113514568272,
+              "absolute_error": 1.815736629606768e-05
+            },
+            {
+              "fraction": 0.25,
+              "time_seconds": 2.5,
+              "rms": 3872.5556714618615,
+              "observed_value": 0.7492637427422476,
+              "formula_value": 0.7492636920481959,
+              "absolute_error": 5.069405173419028e-08
+            },
+            {
+              "fraction": 0.375,
+              "time_seconds": 2.75,
+              "rms": 3854.9570621794433,
+              "observed_value": 0.7476798793092637,
+              "formula_value": 0.7476737999514006,
+              "absolute_error": 6.079357863120194e-06
+            },
+            {
+              "fraction": 0.5,
+              "time_seconds": 3.0,
+              "rms": 3803.8141098524948,
+              "observed_value": 0.7430426078078087,
+              "formula_value": 0.7430582362641648,
+              "absolute_error": 1.562845635605381e-05
+            },
+            {
+              "fraction": 0.625,
+              "time_seconds": 3.25,
+              "rms": 3659.324651457138,
+              "observed_value": 0.7296556581873124,
+              "formula_value": 0.7296589444544426,
+              "absolute_error": 3.286267130198084e-06
+            },
+            {
+              "fraction": 0.75,
+              "time_seconds": 3.5,
+              "rms": 3264.7538106945285,
+              "observed_value": 0.6907455470899695,
+              "formula_value": 0.6907598991442016,
+              "absolute_error": 1.4352054232058542e-05
+            },
+            {
+              "fraction": 0.875,
+              "time_seconds": 3.75,
+              "rms": 2307.729301848951,
+              "observed_value": 0.5778319143993348,
+              "formula_value": 0.5778333544032115,
+              "absolute_error": 1.440003876695961e-06
+            },
+            {
+              "fraction": 0.95,
+              "time_seconds": 3.9,
+              "rms": 1356.689548353729,
+              "observed_value": 0.423684634526924,
+              "formula_value": 0.4235765189592899,
+              "absolute_error": 0.00010811556763412611
+            }
+          ],
+          "max_absolute_error": 0.00010811556763412611
+        },
+        {
+          "start_seconds": 8,
+          "end_seconds": 10,
+          "start_value": 0.25,
+          "end_value": 0.75,
+          "right_point_metadata": 16777216,
+          "right_point_metadata_hex": "0x01000000",
+          "right_point_tension": 0.5,
+          "observations": [
+            {
+              "fraction": 0.05,
+              "time_seconds": 8.1,
+              "rms": 1221.3504244934911,
+              "observed_value": 0.3962629500524464,
+              "formula_value": 0.39617328108902006,
+              "absolute_error": 8.966896342632591e-05
+            },
+            {
+              "fraction": 0.125,
+              "time_seconds": 8.25,
+              "rms": 2037.0446755542896,
+              "observed_value": 0.5394396494404553,
+              "formula_value": 0.539441189475184,
+              "absolute_error": 1.5400347287419791e-06
+            },
+            {
+              "fraction": 0.25,
+              "time_seconds": 8.5,
+              "rms": 2991.0381817626308,
+              "observed_value": 0.6614487332327419,
+              "formula_value": 0.6614975270250789,
+              "absolute_error": 4.879379233702075e-05
+            },
+            {
+              "fraction": 0.375,
+              "time_seconds": 8.75,
+              "rms": 3485.452252381048,
+              "observed_value": 0.7129550526228063,
+              "formula_value": 0.7129682577911685,
+              "absolute_error": 1.3205168362118158e-05
+            },
+            {
+              "fraction": 0.5,
+              "time_seconds": 9.0,
+              "rms": 3712.7224652952973,
+              "observed_value": 0.7346531644032759,
+              "formula_value": 0.7346732849841422,
+              "absolute_error": 2.0120580866311855e-05
+            },
+            {
+              "fraction": 0.625,
+              "time_seconds": 9.25,
+              "rms": 3812.159857619477,
+              "observed_value": 0.7438028691463333,
+              "formula_value": 0.7438262190582416,
+              "absolute_error": 2.3349911908332466e-05
+            },
+            {
+              "fraction": 0.75,
+              "time_seconds": 9.5,
+              "rms": 3854.9586590570007,
+              "observed_value": 0.7476800233004463,
+              "formula_value": 0.7476859793534016,
+              "absolute_error": 5.956052955391478e-06
+            },
+            {
+              "fraction": 0.875,
+              "time_seconds": 9.75,
+              "rms": 3872.9737932758285,
+              "observed_value": 0.7493013003741894,
+              "formula_value": 0.7493136267739431,
+              "absolute_error": 1.232639975368155e-05
+            },
+            {
+              "fraction": 0.95,
+              "time_seconds": 9.9,
+              "rms": 3878.3629653996054,
+              "observed_value": 0.7497850781892839,
+              "formula_value": 0.749793524752441,
+              "absolute_error": 8.44656315712733e-06
+            }
+          ],
+          "max_absolute_error": 8.966896342632591e-05
+        }
+      ]
+    },
+    "hold": {
+      "mode_low_byte": 2,
+      "original_metadata": "0x01000000",
+      "native_metadata": "0x01000002",
+      "tension_preserved": true,
+      "visual_result": "left endpoint stays flat until jump at right endpoint"
+    },
+    "linear": {
+      "right_point_metadata": "0x02000000",
+      "right_point_tension": 0,
+      "observations": [
+        {
+          "time_seconds": 4.1,
+          "observed_value": 0.27500290621015683,
+          "expected_value": 0.2749999999999999
+        },
+        {
+          "time_seconds": 4.5,
+          "observed_value": 0.374999439136204,
+          "expected_value": 0.375
+        },
+        {
+          "time_seconds": 5,
+          "observed_value": 0.499998695367836,
+          "expected_value": 0.5
+        },
+        {
+          "time_seconds": 5.5,
+          "observed_value": 0.6250013230797071,
+          "expected_value": 0.625
+        },
+        {
+          "time_seconds": 5.9,
+          "observed_value": 0.7250004005104641,
+          "expected_value": 0.7250000000000001
+        }
+      ]
+    },
+    "unsupported_observation": {
+      "original_metadata": "0x02000006",
+      "native_saved_metadata": "0x00000006",
+      "visible_shape": "Wave"
+    }
+  },
+  "wav_calibration": {
+    "sample_rate": 44100,
+    "duration_seconds": 12.01562358276644,
+    "rms_window_seconds": 0.02,
+    "rms_window_centered": true,
+    "measurement": "stereo int16 RMS; complete sine cycles",
+    "gain_formula": "(11**value - 1)/10",
+    "static_rms_fitted_from_native_linear_segment": 7699.757996407323,
+    "static_fit_times_seconds": [
+      4.25,
+      4.5,
+      4.75,
+      5,
+      5.25,
+      5.5,
+      5.75
+    ],
+    "inverse_formula": "log(1 + 10*rms/static_rms)/log(11)",
+    "reason_for_fit": "Native clip/audio path has static gain; do not equate source sine RMS with rendered fullscale."
+  },
+  "pattern_events": {
+    "sparse_channel": {
+      "file": "pattern-volume-native.flp",
+      "event_id": 223,
+      "record_format": "<III",
+      "fields": [
+        "absolute_tick",
+        "rec_target",
+        "raw_value"
+      ],
+      "raw_hex": [
+        "0200000000000100930c0000620000000000010026190000c200000000000100b9250000"
+      ],
+      "records": [
+        {
+          "absolute_tick": 2,
+          "rec_target": 65536,
+          "raw_value": 3219
+        },
+        {
+          "absolute_tick": 98,
+          "rec_target": 65536,
+          "raw_value": 6438
+        },
+        {
+          "absolute_tick": 194,
+          "rec_target": 65536,
+          "raw_value": 9657
+        }
+      ]
+    },
+    "interleaved_channel_mixer": {
+      "file": "pattern-channel-mixer-native.flp",
+      "event_id": 223,
+      "record_format": "<III",
+      "fields": [
+        "absolute_tick",
+        "rec_target",
+        "raw_value"
+      ],
+      "raw_hex": [
+        "0200000000000100930c000033000000c01f4070b80f000062000000000001002619000094000000c01f4070701f0000c200000000000100b9250000f4000000c01f4070282f0000"
+      ],
+      "records": [
+        {
+          "absolute_tick": 2,
+          "rec_target": 65536,
+          "raw_value": 3219
+        },
+        {
+          "absolute_tick": 51,
+          "rec_target": 1883250624,
+          "raw_value": 4024
+        },
+        {
+          "absolute_tick": 98,
+          "rec_target": 65536,
+          "raw_value": 6438
+        },
+        {
+          "absolute_tick": 148,
+          "rec_target": 1883250624,
+          "raw_value": 8048
+        },
+        {
+          "absolute_tick": 194,
+          "rec_target": 65536,
+          "raw_value": 9657
+        },
+        {
+          "absolute_tick": 244,
+          "rec_target": 1883250624,
+          "raw_value": 12072
+        }
+      ]
+    },
+    "target_laws": {
+      "0x00010000": {
+        "parameter": "channel 1 volume",
+        "raw_fullscale": 12800
+      },
+      "0x70401fc0": {
+        "parameter": "Mixer insert 1 volume",
+        "raw_fullscale": 16000
+      }
+    },
+    "clock": "absolute PPQ ticks across interleaved targets, never deltas",
+    "value_format": "unsigned 32-bit integer, not IEEE754 float",
+    "playback": {
+      "file": "pattern-hold-playback.wav",
+      "project": "pattern-hold-playback.flp",
+      "sample_rate": 44100,
+      "duration_seconds": 12.01562358276644,
+      "observations": [
+        {
+          "time_seconds": 0.1,
+          "absolute_tick": 19.200000000000003,
+          "rms": 637.2649217545762,
+          "observed_value": 0.25148181091020405
+        },
+        {
+          "time_seconds": 0.25,
+          "absolute_tick": 48.0,
+          "rms": 637.2649217545762,
+          "observed_value": 0.25148181091020405
+        },
+        {
+          "time_seconds": 0.45,
+          "absolute_tick": 86.4,
+          "rms": 637.2649217545762,
+          "observed_value": 0.25148181091020405
+        },
+        {
+          "time_seconds": 0.55,
+          "absolute_tick": 105.60000000000001,
+          "rms": 1802.007546398991,
+          "observed_value": 0.5029717263306633
+        },
+        {
+          "time_seconds": 0.75,
+          "absolute_tick": 144.0,
+          "rms": 1802.007546398991,
+          "observed_value": 0.5029717263306633
+        },
+        {
+          "time_seconds": 0.95,
+          "absolute_tick": 182.39999999999998,
+          "rms": 1802.007546398991,
+          "observed_value": 0.5029717263306633
+        },
+        {
+          "time_seconds": 1.05,
+          "absolute_tick": 201.60000000000002,
+          "rms": 3930.657962496939,
+          "observed_value": 0.7544506037532718
+        },
+        {
+          "time_seconds": 1.25,
+          "absolute_tick": 240.0,
+          "rms": 3930.657962496939,
+          "observed_value": 0.7544506037532718
+        },
+        {
+          "time_seconds": 1.75,
+          "absolute_tick": 336.0,
+          "rms": 3930.657962496939,
+          "observed_value": 0.7544506037532718
+        }
+      ],
+      "conclusion": "zero-order hold between sparse events; short native parameter smoothing at jump boundaries",
+      "old_clip_automation_track_muted": true,
+      "pattern_placed_at_tick": 0
+    },
+    "dense_draw": {
+      "file": "pattern-dense-native.flp",
+      "event_id": 223,
+      "record_format": "<III",
+      "fields": [
+        "absolute_tick",
+        "rec_target",
+        "raw_value"
+      ],
+      "raw_hex": [
+        "0200000000000100930c00000600000000000100b40c00000700000000000100d60c00000800000000000100f80c000009000000000001001a0d00000a000000000001003c0d00000b000000000001005e0d00000c00000000000100800d00000d00000000000100a20d00000e00000000000100c40d00000f00000000000100e60d00001000000000000100080e000011000000000001002a0e000012000000000001004c0e000013000000000001006e0e000014000000000001008f0e00001500000000000100b10e00001600000000000100d30e00001700000000000100f50e00001800000000000100170f00001900000000000100390f00001a000000000001005b0f00001b000000000001007d0f00001c000000000001009f0f00001d00000000000100c10f00001e00000000000100e30f00001f000000000001000510000020000000000001002710000021000000000001004910000022000000000001006b10000023000000000001008c1000002400000000000100ae1000002500000000000100d01000002600000000000100f21000002700000000000100141100002800000000000100361100002900000000000100581100002a000000000001007a1100002b000000000001009c1100002c00000000000100be1100002d00000000000100e01100002e00000000000100021200002f000000000001002412000030000000000001004612000031000000000001006712000032000000000001008912000033000000c01f4070b80f00003300000000000100ab1200003400000000000100cd1200003500000000000100ef1200003600000000000100111300003700000000000100331300003800000000000100551300003900000000000100771300003a00000000000100991300003b00000000000100bb1300003c00000000000100dd1300003d00000000000100ff1300003e00000000000100211400003f00000000000100431400004000000000000100641400004100000000000100861400004200000000000100a81400004300000000000100ca1400004400000000000100ec14000045000000000001000e1500004600000000000100301500004700000000000100521500004800000000000100741500004900000000000100961500004a00000000000100b81500004b00000000000100da1500004c00000000000100fc1500004d000000000001001e1600004e000000000001003f1600004f00000000000100611600005000000000000100831600005100000000000100a51600005200000000000100c71600005300000000000100e916000054000000000001000b17000055000000000001002d17000056000000000001004f1700005700000000000100711700005800000000000100931700005900000000000100b51700005a00000000000100d71700005b00000000000100f91700005c000000000001001b1800005d000000000001003c1800005e000000000001005e1800005f00000000000100801800006000000000000100a21800006100000000000100c41800006200000000000100e618000063000000000001000819000064000000000001002a19000065000000000001004c19000066000000000001006e1900006700000000000100901900006800000000000100b21900006900000000000100d41900006a00000000000100f61900006b00000000000100171a00006c00000000000100391a00006d000000000001005b1a00006e000000000001007d1a00006f000000000001009f1a00007000000000000100c11a00007100000000000100e31a00007200000000000100051b00007300000000000100271b00007400000000000100491b000075000000000001006b1b000076000000000001008d1b00007700000000000100af1b00007800000000000100d11b00007900000000000100f31b00007a00000000000100141c00007b00000000000100361c00007c00000000000100581c00007d000000000001007a1c00007e000000000001009c1c00007f00000000000100be1c00008000000000000100e01c00008100000000000100021d00008200000000000100241d00008300000000000100461d00008400000000000100681d000085000000000001008a1d00008600000000000100ac1d00008700000000000100ce1d00008800000000000100ef1d00008900000000000100111e00008a00000000000100331e00008b00000000000100551e00008c00000000000100771e00008d00000000000100991e00008e00000000000100bb1e00008f00000000000100dd1e00009000000000000100ff1e00009100000000000100211f00009200000000000100431f00009300000000000100651f000094000000c01f4070701f00009400000000000100871f00009500000000000100a91f00009600000000000100cb1f00009700000000000100ec1f000098000000000001000e2000009900000000000100302000009a00000000000100522000009b00000000000100742000009c00000000000100962000009d00000000000100b82000009e00000000000100da2000009f00000000000100fc200000a0000000000001001e210000a10000000000010040210000a20000000000010062210000a30000000000010084210000a400000000000100a6210000a500000000000100c7210000a600000000000100e9210000a7000000000001000b220000a8000000000001002d220000a9000000000001004f220000aa0000000000010071220000ab0000000000010093220000ac00000000000100b5220000ad00000000000100d7220000ae00000000000100f9220000af000000000001001b230000b0000000000001003d230000b1000000000001005f230000b20000000000010081230000b300000000000100a3230000b400000000000100c4230000b500000000000100e6230000b60000000000010008240000b7000000000001002a240000b8000000000001004c240000b9000000000001006e240000ba0000000000010090240000bb00000000000100b2240000bc00000000000100d4240000bd00000000000100f6240000be0000000000010018250000bf000000000001003a250000c0000000000001005c250000c1000000000001007e250000c200000000000100a0250000f4000000c01f4070282f0000"
+      ],
+      "channel_point_count": 190,
+      "channel_gap_counts": {
+        "1": 188,
+        "4": 1
+      },
+      "channel_values_monotone": true,
+      "method": "one native left-button continuous drag in Edit Events",
+      "semantic": "dense integer holds can encode audible gradual volume change",
+      "first_channel_record": {
+        "absolute_tick": 2,
+        "rec_target": 65536,
+        "raw_value": 3219
+      },
+      "last_channel_record": {
+        "absolute_tick": 194,
+        "rec_target": 65536,
+        "raw_value": 9632
+      }
+    }
+  }
+}

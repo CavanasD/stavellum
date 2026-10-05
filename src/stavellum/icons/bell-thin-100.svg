@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- SPDX-License-Identifier: GPL-3.0-or-later; Copyright (c) 2026 Stavellum contributors -->
+  <title>bell</title>
+  <g fill="none" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M10 49h44c-8-7-8-13-8-23a14 14 0 0 0-28 0c0 10 0 16-8 23Z"/>
+<path d="M26 55a6 6 0 0 0 12 0M28 8V6h8v2M7 21l-3-6m53 6 3-6"/>
+  </g>
+</svg>

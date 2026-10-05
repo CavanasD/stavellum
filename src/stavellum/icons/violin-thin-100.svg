@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 72 72">
+  <!-- SPDX-License-Identifier: GPL-3.0-or-later; Copyright (c) 2026 Stavellum contributors -->
+  <title>violin</title>
+  <g fill="none" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<g transform="rotate(35 32 32)">
+<path d="M29 7c-4-4 8-5 6 1l-1 16c13-6 18 9 8 15 13 8 11 19-10 19S9 47 22 39c-10-6-5-21 8-15Z"/>
+<path d="M30 13h4l1 36h-6ZM24 45h16M22 34c-4 1 0 8-4 9m24-9c4 1 0 8 4 9M49 7v50m5-50v50m-5-50h5m-5 50h5"/>
+</g>
+  </g>
+</svg>

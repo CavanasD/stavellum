@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 42.6667">
+  <!-- SPDX-License-Identifier: GPL-3.0-or-later; Copyright (c) 2026 Stavellum contributors -->
+  <title>piano-keyboard</title>
+  <g fill="none" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="3" width="58" height="38" rx="2"/>
+<path d="M3 12h58M12 12v29m10-29v29m10-29v29m10-29v29m10-29v29"/>
+<g fill="#F8FAFC" stroke="none"><path d="M9 12h6v16H9zM19 12h6v16h-6zM39 12h6v16h-6zM49 12h6v16h-6z"/></g>
+  </g>
+</svg>

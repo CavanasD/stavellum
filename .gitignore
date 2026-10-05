@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.cache/
+*.egg-info/
+build/
+dist/
+artifacts/
+.coverage
+src/stavellum/native/rhi/stavellum_rhi.dll
+src/stavellum/native/rhi/quad.vert.qsb
+src/stavellum/native/rhi/quad.frag.qsb

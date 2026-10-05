@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- SPDX-License-Identifier: GPL-3.0-or-later; Copyright (c) 2026 Stavellum contributors -->
+  <title>piano</title>
+  <g fill="none" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M5 45V27c0-9 9-16 17-16h9c10 0 11-5 19-5 6 0 9 5 9 11v28ZM5 35h54M5 45v13h5V45m44 0v13h5V45M14 45v8h36v-8"/>
+<path d="M14 35v10m9-10v10m9-10v10m9-10v10m9-10v10"/>
+<path d="M13 35v5m9-5v5m18-5v5m9-5v5" stroke-width="4"/>
+  </g>
+</svg>
