@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from native_support import require_vulkan_device
 
 ROOT = Path(__file__).resolve().parents[1]
 DLL = ROOT / "src/stavellum/native/rhi/stavellum_rust.dll"
@@ -32,6 +33,7 @@ def test_installed_rust_library_precedes_legacy(tmp_path, monkeypatch):
 @pytest.mark.integration
 @pytest.mark.skipif(sys.platform != "win32" or not DLL.exists(), reason="Built Rust DLL required")
 def test_rust_vulkan_instancing_and_owned_pixels():
+    require_vulkan_device()
     script = r'''
 import ctypes, json, sys, threading
 from pathlib import Path

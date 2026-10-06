@@ -14,6 +14,6 @@ src/stavellum/native/rhi/stavellum_rust.dll
 src/stavellum/native/rhi/stavellum_rhi.dll
 src/stavellum/native/rhi/quad.vert.qsb
 src/stavellum/native/rhi/quad.frag.qsb
-target/
-src/stavellum/native/rhi/stavellum_rust.dll
 src/stavellum/native/core/stavellum_core.dll
+.cargo/config.local.toml
+VP_VULKANINFO_*.json

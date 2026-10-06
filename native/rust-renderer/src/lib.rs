@@ -181,7 +181,7 @@ impl Gpu {
             unsafe { ash::Entry::load() }.map_err(|error| format!("Cannot load the Vulkan loader: {error}"))?;
         let application = vk::ApplicationInfo::default()
             .application_name(c"stavellum")
-            .api_version(vk::make_api_version(0, 1, 1, 0));
+            .api_version(vk::make_api_version(0, 1, 0, 0));
         let info = vk::InstanceCreateInfo::default().application_info(&application);
         let instance = unsafe { entry.create_instance(&info, None) }
             .map_err(|_| "Cannot create Vulkan instance".to_owned())?;
@@ -396,6 +396,7 @@ struct Renderer {
     resolve_view: vk::ImageView,
     textures: HashMap<u64, Texture>,
     pending: Vec<(u64, PendingUpload)>,
+    spare_sets: Vec<(usize, vk::DescriptorSet)>,
     instances: HostBuffer,
     uploads: HostBuffer,
     staging: HostBuffer,
@@ -415,7 +416,6 @@ impl Drop for Renderer {
             let device = &self.gpu.device;
             let _ = device.device_wait_idle();
             for texture in self.textures.values() {
-                let _ = device.free_descriptor_sets(self.pools[texture.pool], &[texture.set]);
                 device.destroy_image_view(texture.view, None);
                 device.destroy_image(texture.image, None);
                 device.free_memory(texture.memory, None);
@@ -474,24 +474,41 @@ impl Renderer {
         let frame_bytes = width as usize * height as usize * 4;
         let device = &gpu.device;
 
-        let supports = |format, samples| unsafe {
+        // The multisample target only renders; the resolve target only
+        // transfers, so each is probed with exactly its own usage.
+        let supports = |format, usage, samples| unsafe {
             gpu.instance
                 .get_physical_device_image_format_properties(
                     gpu.physical,
                     format,
                     vk::ImageType::TYPE_2D,
                     vk::ImageTiling::OPTIMAL,
-                    vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+                    usage,
                     vk::ImageCreateFlags::empty(),
                 )
                 .map(|properties| properties.sample_counts.contains(samples))
                 .unwrap_or(false)
         };
-        let force_rgba =
-            std::env::var("STAVELLUM_RHI_RGBA_READBACK").is_ok_and(|value| value == "1");
-        let bgra = !force_rgba && supports(vk::Format::B8G8R8A8_UNORM, vk::SampleCountFlags::TYPE_4);
+        // Any nonzero value enables the diagnostic path, matching the C++
+        // qEnvironmentVariableIntValue semantics.
+        let force_rgba = std::env::var("STAVELLUM_RHI_RGBA_READBACK")
+            .ok()
+            .and_then(|value| value.trim().parse::<i64>().ok())
+            .is_some_and(|value| value != 0);
+        let usable = |format| {
+            supports(
+                format,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT,
+                vk::SampleCountFlags::TYPE_4,
+            ) && supports(
+                format,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+                vk::SampleCountFlags::TYPE_1,
+            )
+        };
+        let bgra = !force_rgba && usable(vk::Format::B8G8R8A8_UNORM);
         require(
-            bgra || supports(vk::Format::R8G8B8A8_UNORM, vk::SampleCountFlags::TYPE_4),
+            bgra || usable(vk::Format::R8G8B8A8_UNORM),
             "Requested RHI backend cannot provide 4xMSAA",
         )?;
         let format = if bgra { vk::Format::B8G8R8A8_UNORM } else { vk::Format::R8G8B8A8_UNORM };
@@ -783,6 +800,7 @@ impl Renderer {
             resolve_view,
             textures: HashMap::new(),
             pending: Vec::new(),
+            spare_sets: Vec::new(),
             instances,
             uploads,
             staging,
@@ -834,7 +852,10 @@ impl Renderer {
             "Invalid texture size",
         )?;
         require(stride as i64 >= width as i64 * 4, "Invalid texture stride")?;
-        require(!self.textures.contains_key(&id), "Texture ID already uploaded")?;
+        require(
+            !self.textures.contains_key(&id) && !self.has_pending_texture(&id),
+            "Texture ID already uploaded",
+        )?;
         let started = Instant::now();
         let width = width as usize;
         let height = height as usize;
@@ -866,10 +887,9 @@ impl Renderer {
         }
         if let Some(texture) = self.textures.remove(&id) {
             unsafe {
-                let _ = self
-                    .gpu
-                    .device
-                    .free_descriptor_sets(self.pools[texture.pool], &[texture.set]);
+                // The descriptor set stays allocated and is recycled above;
+                // upload and eviction churn must not grow pools unbounded.
+                self.spare_sets.push((texture.pool, texture.set));
                 self.gpu.device.destroy_image_view(texture.view, None);
                 self.gpu.device.destroy_image(texture.image, None);
                 self.gpu.device.free_memory(texture.memory, None);
@@ -883,6 +903,10 @@ impl Renderer {
     fn allocate_set(&mut self, view: vk::ImageView) -> Result<(vk::DescriptorSet, usize), String> {
         const POOL_SETS: u32 = 64;
         let device = &self.gpu.device;
+        if let Some((pool, set)) = self.spare_sets.pop() {
+            self.write_texture_bindings(set, view);
+            return Ok((set, pool));
+        }
         if self.pools.is_empty() || self.sets_in_pool == POOL_SETS {
             let sizes = [
                 vk::DescriptorPoolSize::default()
@@ -902,22 +926,27 @@ impl Renderer {
             self.sets_in_pool = 0;
         }
         let pool = *self.pools.last().expect("pool just ensured");
-        let set = unsafe {
+        let sets = unsafe {
             device.allocate_descriptor_sets(
                 &vk::DescriptorSetAllocateInfo::default()
                     .descriptor_pool(pool)
                     .set_layouts(&[self.layout]),
             )
         }
-        .map_err(|_| "Cannot create texture bindings".to_owned())?[0];
+        .map_err(|_| "Cannot create texture bindings".to_owned())?;
         self.sets_in_pool += 1;
+        self.write_texture_bindings(sets[0], view);
+        Ok((sets[0], self.pools.len() - 1))
+    }
+
+    fn write_texture_bindings(&self, set: vk::DescriptorSet, view: vk::ImageView) {
         let image_info = vk::DescriptorImageInfo::default()
             .image_view(view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
         let sampler_info =
             vk::DescriptorImageInfo::default().sampler(self.sampler);
         unsafe {
-            device.update_descriptor_sets(
+            self.gpu.device.update_descriptor_sets(
                 &[
                     vk::WriteDescriptorSet::default()
                         .dst_set(set)
@@ -933,15 +962,28 @@ impl Renderer {
                 &[],
             );
         }
-        Ok((set, self.pools.len() - 1))
     }
 
     /// Create GPU images for pending uploads and stage their bytes.
     fn stage_pending(&mut self) -> Result<Vec<(u64, vk::DeviceSize, u32, u32)>, String> {
+        let mut pending = std::mem::take(&mut self.pending);
+        // Upload order is irrelevant (every texture is independent), but a
+        // mid-batch failure must hand the not-yet-staged uploads back: their
+        // sprhi_upload calls already reported success.
+        let outcome = self.stage_pending_inner(&mut pending);
+        if outcome.is_err() {
+            self.pending.extend(pending);
+        }
+        outcome
+    }
+
+    fn stage_pending_inner(
+        &mut self,
+        pending: &mut Vec<(u64, PendingUpload)>,
+    ) -> Result<Vec<(u64, vk::DeviceSize, u32, u32)>, String> {
         let mut placed = Vec::new();
         let mut offset = 0 as vk::DeviceSize;
-        let pending = std::mem::take(&mut self.pending);
-        for (id, upload) in pending {
+        while let Some((id, upload)) = pending.pop() {
             let extent =
                 vk::Extent3D { width: upload.width, height: upload.height, depth: 1 };
             let (image, memory, view) = {
@@ -1253,7 +1295,7 @@ impl Renderer {
                     &[],
                     &[vk::ImageMemoryBarrier::default()
                         .image(self.resolve)
-                        .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                        .src_access_mask(vk::AccessFlags::TRANSFER_READ)
                         .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                         .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                         .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -1365,7 +1407,7 @@ impl Renderer {
             "graphics_api": "vulkan",
             "renderer_implementation": "rust-ash",
             "native_language": "rust",
-            "native_swizzle_path": swizzle_path(),
+            "native_swizzle_path": swizzle_path(self.bgra),
             "qt_version": "rust-native",
             "gpu_info": {"renderer": self.gpu.name, "msaa_samples": 4},
             "gpu_texture_cache_budget_bytes": self.budget,
@@ -1461,7 +1503,10 @@ fn swizzle_rgba_to_bgra(pixels: &mut [u8]) {
     }
 }
 
-fn swizzle_path() -> &'static str {
+fn swizzle_path(bgra: bool) -> &'static str {
+    if bgra {
+        return "none";
+    }
     #[cfg(target_arch = "x86_64")]
     {
         if std::arch::is_x86_feature_detected!("avx2") {
@@ -1701,12 +1746,14 @@ pub extern "C" fn sprhi_last_error(_: *mut c_void) -> *const c_char {
 pub unsafe extern "C" fn sprhi_close(pointer: *mut c_void) -> i32 {
     guarded(|| {
         if !pointer.is_null() {
-            let handle = Box::from_raw(pointer.cast::<Handle>());
+            // Taking ownership before the thread check would destroy the
+            // renderer even when the caller is told the close was refused.
+            let handle = &*pointer.cast::<Handle>();
             require(
                 handle.thread == thread::current().id(),
                 "Close RHI on creating thread",
             )?;
-            drop(handle);
+            drop(Box::from_raw(pointer.cast::<Handle>()));
         }
         Ok(())
     })

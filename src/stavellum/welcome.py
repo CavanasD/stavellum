@@ -295,7 +295,9 @@ class WelcomePage(QWidget):
         # Drag from the header band or the decorative right zone; interactive
         # widgets swallow their own clicks before this handler runs.
         decorative = position.x() > self.width() - 320
-        if (position.y() < 104 or decorative) and self.windowHandle() is not None:
+        if (event.button() == Qt.MouseButton.LeftButton
+                and (position.y() < 104 or decorative)
+                and self.windowHandle() is not None):
             self.windowHandle().startSystemMove()
         super().mousePressEvent(event)
 

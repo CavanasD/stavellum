@@ -13,15 +13,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def mingw_linker() -> Path | None:
-    """The GCC linker pinned for the GNU target in .cargo/config.toml."""
-    config = ROOT / ".cargo" / "config.toml"
-    if not config.is_file():
-        return None
-    match = re.search(r'linker\s*=\s*"([^"]+)"', config.read_text(encoding="utf-8"))
-    if not match:
-        return None
-    linker = Path(match.group(1))
-    return linker if linker.is_file() else None
+    """A usable MinGW gcc for the GNU target, wherever it can be found."""
+    override = os.environ.get("STAVELLUM_MINGW")
+    if override:
+        gcc = Path(override) / "gcc.exe"
+        return gcc if gcc.is_file() else None
+    on_path = shutil.which("gcc.exe")
+    if on_path:
+        return Path(on_path)
+    for config in (ROOT / ".cargo" / "config.local.toml", ROOT / ".cargo" / "config.toml"):
+        if not config.is_file():
+            continue
+        match = re.search(r'linker\s*=\s*"([^"]+)"', config.read_text(encoding="utf-8"))
+        if match and Path(match.group(1)).is_file():
+            return Path(match.group(1))
+    return None
 
 
 def build_environment() -> dict[str, str]:
@@ -35,6 +41,7 @@ def build_environment() -> dict[str, str]:
             raise RuntimeError("STAVELLUM_MINGW must point to a MinGW bin directory")
         environment["PATH"] = str(linker.parent) + os.pathsep + environment["PATH"]
         environment["CARGO_BUILD_TARGET"] = "x86_64-pc-windows-gnu"
+        environment["CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER"] = str(linker)
         return environment
     if sys.platform != "win32":
         return environment
@@ -63,24 +70,26 @@ def build_environment() -> dict[str, str]:
     # No MSVC link.exe: fall back to a preinstalled windows-gnu Rust toolchain.
     # Its linker is already pinned by .cargo/config.toml; the same directory
     # must be on PATH because crate build scripts invoke dlltool.
-    toolchains = subprocess.run(["rustup", "toolchain", "list"], check=True,
-                                capture_output=True, text=True,
-                                creationflags=subprocess.CREATE_NO_WINDOW).stdout
+    try:
+        toolchains = subprocess.run(["rustup", "toolchain", "list"], check=True,
+                                    capture_output=True, text=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RuntimeError("No MSVC link.exe and rustup unavailable: "
+                           f"{error}") from error
     gnu = next((line.split()[0] for line in toolchains.splitlines()
-                if line.strip().endswith("x86_64-pc-windows-gnu")
-                and "default" not in line.split()[1:2]), None)
-    gnu = gnu or next((line.split()[0] for line in toolchains.splitlines()
-                       if line.split()[0].endswith("x86_64-pc-windows-gnu")), None)
+                if line.split()[0].endswith("x86_64-pc-windows-gnu")), None)
     if not gnu:
         raise RuntimeError("Install Visual Studio C++ Build Tools or a "
                            "x86_64-pc-windows-gnu Rust toolchain")
     environment["RUSTUP_TOOLCHAIN"] = gnu
     linker = mingw_linker()
     if linker:
+        environment["CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER"] = str(linker)
         environment["PATH"] = str(linker.parent) + os.pathsep + environment["PATH"]
     if not shutil.which("dlltool.exe", path=environment["PATH"]):
         raise RuntimeError("MinGW bin directory (dlltool.exe) is required on PATH "
-                           "for the GNU target; set STAVELLUM_MINGW")
+                           "for the GNU target; set STAVELLUM_MINGW or install gcc")
     return environment
 
 
