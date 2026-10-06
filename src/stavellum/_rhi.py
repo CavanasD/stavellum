@@ -1,4 +1,4 @@
-"""Explicit ctypes ABI for the QRhi Vulkan compositor."""
+"""ctypes ABI for the Rust Vulkan compositor and historical QRhi library."""
 
 from __future__ import annotations
 
@@ -39,6 +39,12 @@ def library_path() -> Path:
     override = os.environ.get("STAVELLUM_RHI_DLL")
     if override:
         return Path(override).resolve()
+    root = Path(__file__).resolve()
+    # Installed Rust builds are preferred. A development build is selected only
+    # explicitly, so incomplete or stale Cargo outputs cannot change production.
+    rust_library = root.parent / "native/rhi/stavellum_rust.dll"
+    if rust_library.is_file():
+        return rust_library
     package = Path(__file__).resolve().parent / "native/rhi/stavellum_rhi.dll"
     if package.is_file():
         return package
@@ -80,7 +86,7 @@ class RhiTarget:
                 self._error()
         except OSError as error:
             self._directory.close()
-            raise GpuBackendError("无法加载 Vulkan 渲染库；请运行 scripts/build_rhi.py --install："
+            raise GpuBackendError("无法加载 Vulkan 渲染库；请运行 scripts/build_rust.py --install："
                                   + str(error)) from error
         except BaseException:
             self._directory.close()
