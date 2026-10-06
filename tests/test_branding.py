@@ -69,12 +69,12 @@ def test_window_and_application_icons_update_on_theme_and_palette_signals(monkey
         app.setWindowIcon(original)
 
 
-def test_welcome_banner_uses_light_logo_even_in_dark_environment(monkeypatch):
-    from stavellum.welcome import _MusicBanner
+def test_welcome_header_uses_light_logo_even_in_dark_environment(monkeypatch):
+    from stavellum.welcome import _BrandHeader
 
     ensure_app()
     monkeypatch.setattr(branding, "_dark_environment", lambda: True)
-    banner = _MusicBanner()
-    assert banner._logo.toImage() == branding.logo_image().convertToFormat(
+    header = _BrandHeader()
+    assert header._logo.toImage() == branding.logo_image().convertToFormat(
         QImage.Format.Format_ARGB32_Premultiplied)
-    banner.deleteLater()
+    header.deleteLater()
