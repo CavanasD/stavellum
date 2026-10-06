@@ -1,0 +1,6 @@
+# The preinstalled Rust toolchain on this machine is GNU; Visual Studio's
+# link.exe is unavailable, so route x86_64-pc-windows-gnu through CLion's
+# MinGW GCC and pin its runtime statically into the cdylib.
+[target.x86_64-pc-windows-gnu]
+linker = "D:/Program Files/JetBrains/CLion 2026.2.1/bin/mingw/bin/gcc.exe"
+rustflags = ["-C", "link-arg=-static-libgcc"]
