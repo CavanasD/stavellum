@@ -44,11 +44,12 @@ $env:STAVELLUM_RHI_DLL = "$PWD/target/release/stavellum_rust.dll"   # explicit o
 ```
 
 The script uses MSVC when Visual Studio C++ tools are installed and otherwise
-falls back to a preinstalled `x86_64-pc-windows-gnu` Rust toolchain; the GNU
-linker is pinned in `.cargo/config.toml` (its directory also provides
-`dlltool` for crate build scripts). `libgcc` is linked statically, so the DLL
-depends only on system libraries. `STAVELLUM_MINGW` overrides the MinGW
-location explicitly.
+falls back to a preinstalled `x86_64-pc-windows-gnu` Rust toolchain. The
+MinGW gcc is discovered per invocation (`STAVELLUM_MINGW`, `gcc.exe` on PATH,
+or a gitignored `.cargo/config.local.toml`) and exported through
+`CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER`; its directory also provides
+`dlltool` for crate build scripts. `libgcc` is linked statically (pinned in
+`.cargo/config.toml`), so the DLL depends only on system libraries.
 
 An installed `stavellum_rust.dll` is preferred automatically by
 `_rhi.library_path()`; the legacy Qt DLL remains selectable through

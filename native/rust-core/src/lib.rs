@@ -159,7 +159,7 @@ impl Track {
         require(!keys.is_empty(), "Layout track requires at least one key")?;
         for pair in keys.windows(2) {
             require(
-                pair[1].time >= pair[0].time,
+                pair[1].time > pair[0].time,
                 "Layout track keys must be sorted by time",
             )?;
         }
@@ -554,14 +554,23 @@ impl CoreScene {
     }
 
     /// The cheapest power-of-two raster that never needs upsampling.
+    ///
+    /// A degenerate zoom (exp underflow) would otherwise underflow the scale
+    /// to zero and loop forever; the Python path raises instead. Returning
+    /// level zero keeps native evaluation total for any finite input.
     fn raster_level(&self, display_scale: f64) -> i32 {
-        let mut level = (self.consts.scene_scale / display_scale).log2().floor().max(0.0) as i32;
+        let ratio = self.consts.scene_scale / display_scale;
+        if !(display_scale.is_finite() && display_scale > 0.0
+            && ratio.is_finite() && ratio > 0.0) {
+            return 0;
+        }
+        let mut level = (ratio.log2().floor().max(0.0) as i32).min(1023);
         // Guard roundoff at exact layer boundaries without rounding up into a
         // raster smaller than the requested display resolution.
         while level != 0 && self.consts.scene_scale / 2f64.powi(level) < display_scale {
             level -= 1;
         }
-        while self.consts.scene_scale / 2f64.powi(level + 1) >= display_scale {
+        while level < 1023 && self.consts.scene_scale / 2f64.powi(level + 1) >= display_scale {
             level += 1;
         }
         level
@@ -624,6 +633,8 @@ impl CoreScene {
                 * 4.0;
             working_bytes += bytes * ((tile_last - tile_first + 1) as f64);
         }
+        // camera_speed is the raw CameraTimeline.speed_at(audio_time):
+        // unlike CompiledScene.camera_speed_at it does not zero the intro.
         CoreFrame {
             world_x,
             scale,
@@ -724,6 +735,7 @@ pub unsafe extern "C" fn spcore_compile(
             score_offset: camera_offset,
             half_window: camera_window,
         };
+        require(zoom_count >= 1, "Layout zoom track requires at least one key")?;
         let zoom = Track::new(
             std::slice::from_raw_parts(zoom_keys, zoom_count as usize).to_vec(),
         )?;
@@ -731,6 +743,16 @@ pub unsafe extern "C" fn spcore_compile(
         let tops_counts = std::slice::from_raw_parts(tops_counts, part_count);
         let opacity_counts = std::slice::from_raw_parts(opacity_counts, part_count);
         let note_counts = std::slice::from_raw_parts(note_counts, part_count);
+        // The declared totals must cover exactly the per-part counts before
+        // any raw slice is formed from them.
+        require(
+            total(tops_counts) == tops_total.max(0) as usize,
+            "Tops key total does not match the per-part counts",
+        )?;
+        require(
+            total(opacity_counts) == opacity_total.max(0) as usize,
+            "Opacity key total does not match the per-part counts",
+        )?;
         let dimensions = std::slice::from_raw_parts(part_dimensions, part_count * 2);
         let tops_total = tops_total.max(0) as usize;
         let opacity_total = opacity_total.max(0) as usize;

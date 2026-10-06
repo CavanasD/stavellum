@@ -13,6 +13,10 @@ fn main() {
     )
     .validate(&module)
     .unwrap_or_else(|errors| panic!("validate quad.wgsl: {errors:?}"));
+    let mut options = naga::back::spv::Options::default();
+    // The quad shader maps pixel rows onto Vulkan's y-down NDC itself;
+    // naga's automatic y-flip epilogue must not be applied on top of it.
+    options.flags -= naga::back::spv::WriterFlags::ADJUST_COORDINATE_SPACE;
     for (stage, entry) in [
         (naga::ShaderStage::Vertex, "vs_main"),
         (naga::ShaderStage::Fragment, "fs_main"),
@@ -20,7 +24,7 @@ fn main() {
         let words = naga::back::spv::write_vec(
             &module,
             &info,
-            &naga::back::spv::Options::default(),
+            &options,
             Some(&naga::back::spv::PipelineOptions {
                 shader_stage: stage,
                 entry_point: entry.to_owned(),

@@ -18,10 +18,10 @@ fn vs_main(@builtin(vertex_index) vertex: u32,
     let corner = corners[vertex];
     let pixel = rect.xy + corner * rect.zw;
     var output: VertexOutput;
-    // WGSL clip space has y pointing up while pixel rows grow downward;
-    // naga emits that convention verbatim into Vulkan's y-down NDC.
+    // Pure Vulkan NDC (y grows downward with pixel rows). build.rs disables
+    // naga's automatic coordinate-space adjustment so this mapping is exact.
     output.position = vec4<f32>(pixel.x / frame.size.x * 2.0 - 1.0,
-                                1.0 - pixel.y / frame.size.y * 2.0, 0.0, 1.0);
+                                pixel.y / frame.size.y * 2.0 - 1.0, 0.0, 1.0);
     output.uv = mix(uv_rect.xy, uv_rect.zw, corner);
     output.color = color;
     return output;

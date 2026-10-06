@@ -106,7 +106,7 @@ outcome, superseding the handoff note above:
   longer mistakes Git's coreutils `link.exe` for MSVC.
 - Validation: cargo test plus the full native integration suite pass
   (test_rust_renderer 3, test_rhi_owned 3, batch+readback 3, test_rhi
-  REAL 1). Full pytest: 1166 passed after pinning one CPU-internals tempo
+  REAL 1). Full pytest green after pinning one CPU-internals tempo
   test that assumed the auto backend could never select a working GPU.
 - Measured (RTX 5070 Laptop): 1080p batch-4 stream 538 fps vs 234 fps CPU
   (2.3×); 4K 149 vs 78 (1.9×); synthetic 666 fps at batch 8.
@@ -133,3 +133,48 @@ doubles/ints inside CoreFrame) were caught by the golden test — the exact
 class of bug the parity harness exists for. Hot-path wiring of `_core` into
 `layout_at`/`commands` is deliberately left as follow-up work; the crate is
 consumer-ready but the Python call sites still use the pure-Python path.
+
+### 2026-10-06 GLM (ZCode) — three-agent review, all findings triaged
+
+Reviewers: Vulkan renderer (P0:1 P1:1 P2:3 P3:6), rust-core parity
+(P1:1 P2:4 P3:5), integration/packaging (P1:2 P2:6 P3:4). Fixes landed:
+
+- P0 renderer: wrong-thread `sprhi_close` freed the renderer despite
+  returning an error (use-after-free); ownership is now taken only after
+  the thread check passes.
+- P1 renderer: duplicate texture ids waiting in the pending-upload queue
+  were accepted and silently leaked GPU objects; upload now rejects them
+  with the C++ message.
+- P1 core: `raster_level` could livelock on a degenerate zoom (exp
+  underflow); degenerate ratios now return level 0 and the loop is bounded.
+- P2 renderer: `stage_pending` restores not-yet-staged uploads on failure;
+  descriptor sets are recycled through a spare list instead of leaking
+  pools under eviction churn; the post-copy barrier declares TRANSFER_READ.
+- P2 core: `spcore_compile` validates declared totals against per-part
+  counts (no more trusted-length slices); track keys must strictly
+  increase; `camera_speed` documented as the raw camera value.
+- P2 integration: `.cargo/config.toml` is portable again (machine linkers
+  live in gitignored `.cargo/config.local.toml`; build_rust.py exports
+  `CARGO_TARGET_..._GNU_LINKER` from STAVELLUM_MINGW/PATH/local config);
+  `_rhi.py` PySide6 gate applies only to the legacy Qt DLL; dead
+  `.cache/rhi/build/stavellum_rust.dll` fallback removed; sdist ships
+  `.cargo/config.toml` + README-zh; README.md build path points at
+  build_rust.py; dead "rust-wgpu" test arms removed; integration tests
+  skip (not fail) on DLL-present/GPU-absent machines via a cached probe.
+- P3: naga's automatic coordinate-space adjustment is now explicitly
+  disabled in build.rs and the shader owns the Vulkan y-down mapping;
+  format probes split per attachment role; RGBA env matches C++ nonzero
+  semantics; instance asks for Vulkan 1.0; `native_swizzle_path` reports
+  "none" on the BGRA path; welcome drag is left-button only; stray
+  vulkaninfo dump untracked; test_welcome rewritten for the new page.
+
+Accepted risks (documented, not fixed): per-texture dedicated
+vkAllocateMemory (live allocations stay far below the 4096 guarantee for
+realistic cache budgets) and partial-object leaks on early failures in
+`Renderer::new` (init-time only).
+
+Validation after fixes: full pytest 1170 passed / 0 failed, all eight
+pixel-contract integration tests green, cargo test 8 passed across both
+crates, clippy and ruff clean, and the golden parity harness extended to a
+multi-part scene with announcement expansion, hidden rows, negative times,
+camera speed and inconsistent-totals rejection.

@@ -57,8 +57,12 @@ class RhiTarget:
     def __init__(self, width: int, height: int, cache_megabytes: int, api: str):
         if api != "vulkan":
             raise ValueError("RHI API must be vulkan")
-        if sys.platform != "win32" or PySide6.__version__ != "6.11.2":
-            raise GpuBackendError("Vulkan 渲染需要 Windows x64 和 PySide6 6.11.2。")
+        if sys.platform != "win32":
+            raise GpuBackendError("Vulkan 渲染需要 Windows x64。")
+        # Only the legacy Qt RHI DLL shares PySide6's private ABI; the Rust
+        # backend pins nothing beyond a working Vulkan loader.
+        if library_path().name == "stavellum_rhi.dll" and PySide6.__version__ != "6.11.2":
+            raise GpuBackendError("传统 Qt 渲染后端要求 PySide6 6.11.2。")
         self._thread = threading.get_ident()
         self.width, self.height = width, height
         self.budget = cache_megabytes * 1024 * 1024

@@ -11,6 +11,7 @@ import weakref
 from pathlib import Path
 
 import pytest
+from native_support import require_vulkan_device
 from PySide6.QtGui import QImage
 
 from stavellum import _rhi
@@ -121,25 +122,20 @@ for copy in (False, True):
         else:
             assert output == baseline, (api, copy, rgba, "readback bytes differ")
         report = target.report()
-        rust = report.get("renderer_implementation") == "rust-wgpu"
         assert report["readback_format"] == ("RGBA8" if rgba else "BGRA8")
         size = width * height * 4
         assert report["owned_readback_frame_count"] == (0 if copy else 6)
         assert report["copied_readback_frame_count"] == (6 if copy else 0)
-        assert report["memory_copy_bytes"] == (6 * size * (2 if copy else 1) if rust
-                                               else (6 * size if copy else 0))
-        assert report["readback_buffer_peak_bytes"] == size * (2 if copy and not rust else 1)
-        if rust:
-            assert report["memory_copy_seconds"] > 0
-            assert report["readback_copy_path"] == "mapped-staging-to-owned-cpu"
-        elif not copy:
+        assert report["memory_copy_bytes"] == (6 * size if copy else 0)
+        assert report["readback_buffer_peak_bytes"] == size * (2 if copy else 1)
+        if not copy:
             assert report["memory_copy_seconds"] == 0
             assert report["readback_copy_path"] == ("rgba-inplace-sse2-swizzle" if rgba else "bgra-owned-buffer")
         else:
             assert report["memory_copy_seconds"] > 0
             assert report["readback_copy_path"] == ("rgba-sse2-swizzle" if rgba else "bgra-memcpy")
-        assert report["inplace_format_conversion_bytes"] == (6 * size if rgba and not copy and not rust else 0)
-        if rgba and not copy and not rust:
+        assert report["inplace_format_conversion_bytes"] == (6 * size if rgba and not copy else 0)
+        if rgba and not copy:
             assert report["inplace_format_conversion_seconds"] > 0
         reports.append(report)
         target.close()
@@ -248,6 +244,7 @@ from dataclasses import replace
 from pathlib import Path
 sys.path.insert(0, "tests")
 from test_export_pipeline import Process
+from native_support import require_vulkan_device
 from test_render import rendered_document
 from stavellum import export
 from stavellum.models import RenderSettings
@@ -344,6 +341,7 @@ print(json.dumps({"api": api, "rejected": len(cases), "frames": len(cases)}), fl
 
 
 def run_native(script: str, api: str):
+    require_vulkan_device()
     root = Path(__file__).resolve().parents[1]
     dll = _rhi.library_path()
     if not dll.exists():
