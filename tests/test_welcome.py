@@ -9,7 +9,8 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication
 
-from stavellum.welcome import RecentProjects, WelcomePage, _MusicBanner
+from stavellum import __version__
+from stavellum.welcome import RecentProjects, WelcomePage
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -63,7 +64,6 @@ def test_recent_projects_accept_legacy_single_setting_and_invalid_data(settings,
 
 def test_welcome_actions_and_missing_recent_project(app, tmp_path):
     page = WelcomePage()
-    page.resize(800, 560)
     page.show()
     app.processEvents()
     missing = str(tmp_path / "moved.stproj")
@@ -94,37 +94,37 @@ def test_welcome_actions_and_missing_recent_project(app, tmp_path):
     app.processEvents()
 
 
-def test_demo_selection_and_busy_guard_all_navigation(app, tmp_path):
+def test_demo_link_and_busy_guard_all_navigation(app, tmp_path):
     page = WelcomePage()
     page.set_recent_projects([str(tmp_path / "piece.stproj")])
     page.set_has_document(True)
     demo_spy = QSignalSpy(page.demo_requested)
     project_spy = QSignalSpy(page.project_requested)
-    page.categories.setCurrentRow(1)
-    page.selected_button.click()
+    page.demo_button.click()
     assert demo_spy.count() == 1
     page.set_busy(True)
-    assert not page.tabs.isEnabled()
-    assert not page.selected_button.isEnabled()
-    assert not page.open_button.isEnabled()
-    assert not page.new_button.isEnabled()
-    assert not page.resume_button.isEnabled()
-    page.demo_list.itemActivated.emit(page.demo_list.item(0))
+    for control in (page.selected_button, page.open_button, page.new_button,
+                    page.resume_button, page.demo_button, page.recent_list):
+        assert not control.isEnabled()
+    page.demo_button.click()
     page.recent_list.itemActivated.emit(page.recent_list.item(0))
     page._activate_selection()
     assert demo_spy.count() == 1
     assert project_spy.count() == 0
+    # The task bar lives on the same page and must stay interactive while a
+    # background job runs, so only action controls are disabled.
+    assert page.task_status.isEnabled() and page.cancel_task_button.isEnabled()
     page.set_busy(False)
     assert page.selected_button.isEnabled()
     assert page.resume_button.isEnabled()
-    page.selected_button.click()
+    page.demo_button.click()
     assert demo_spy.count() == 2
     page.deleteLater()
     app.processEvents()
 
 
-@pytest.mark.parametrize("width,height", [(640, 480), (800, 560), (1100, 740), (1280, 740)])
-def test_welcome_page_fits_and_banner_paints_at_common_sizes(app, width, height):
+@pytest.mark.parametrize("width,height", [(900, 620), (1100, 740), (1280, 800), (1440, 900)])
+def test_welcome_page_paints_dark_chrome_at_common_sizes(app, width, height):
     page = WelcomePage()
     page.resize(width, height)
     page.show()
@@ -132,26 +132,19 @@ def test_welcome_page_fits_and_banner_paints_at_common_sizes(app, width, height)
     assert page.size().width() == width
     assert page.size().height() == height
     assert page.new_button.geometry().right() < width
-    assert page.banner.height() >= 150
-    image = page.banner.grab().toImage()
+    image = page.grab().toImage()
     assert not image.isNull()
-    assert image.pixelColor(2, 2).name() == "#f1cfaa"
-    assert image.pixelColor(int(image.width() * 0.39), 2).name() == "#f1cfaa"
-    assert image.pixelColor(int(image.width() * 0.41), 2).name() == "#fff4e9"
+    # The painted gradient starts at the page's dark chrome color.
+    assert image.pixelColor(2, 2).name().lower() in ("#1b222c", "#1a212c")
     page.deleteLater()
     app.processEvents()
 
 
-def test_banner_text_proportions_do_not_stretch_with_window_width(app):
-    banner = _MusicBanner()
-    assert banner.sizeHint().height() == 190
-    # Leave enough title space even with the Windows offscreen fallback font.
-    banner.resize(1600, 190)
-    banner.show()
+def test_brand_header_carries_logo_and_version(app):
+    page = WelcomePage()
+    header = page.header
+    assert not header._logo.isNull()
+    assert header.version_chip.text() == f"v{__version__}"
+    assert header.title_label.text() == "Stavellum"
+    page.deleteLater()
     app.processEvents()
-    original = banner.grab().toImage().copy(0, 0, 340, 100)
-    banner.resize(1920, 190)
-    app.processEvents()
-    wide = banner.grab().toImage().copy(0, 0, 340, 100)
-    assert wide == original
-    banner.close()
