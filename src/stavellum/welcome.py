@@ -5,16 +5,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QSettings, Qt, Signal
+from PySide6.QtCore import QRectF, QSettings, QSize, Qt, Signal
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
     QFont,
-    QLinearGradient,
     QPainter,
-    QPainterPath,
-    QPen,
-    QRadialGradient,
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -27,25 +23,23 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizeGrip,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from . import __version__
-from .branding import APPLICATION_DESCRIPTION, bind_application_icon, logo_pixmap
+from .branding import APPLICATION_DESCRIPTION, bind_application_icon
+from .theme import DESKTOP_STYLESHEET, apply_desktop_theme, desktop_icon
 
 # The palette echoes the editor's dark chrome with the product's warm accent.
-_BACKGROUND_TOP = QColor("#1b222c")
-_BACKGROUND_BOTTOM = QColor("#0e131a")
-_PANEL = "#1a212b"
 _PANEL_HOVER = "#212b37"
 _PANEL_BORDER = "#2a3441"
 _TEXT = "#e8ecf1"
-_MUTED = "#8b98a8"
+_MUTED = "#a4b2c3"
 _ACCENT = "#edc398"
-_ACCENT_HOVER = "#f7d6b3"
-_ACCENT_TEXT = "#20242a"
 
 
 class RecentProjects:
@@ -92,87 +86,42 @@ class RecentProjects:
         self.settings.sync()
 
 
-class _BrandHeader(QWidget):
-    """Logo mark, wordmark and tagline; owns the chosen logo pixmap for tests."""
+class _RecentProjectDelegate(QStyledItemDelegate):
+    """Keep project names readable and elide long paths within their own row."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._logo = logo_pixmap()
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-        self.logo_label = QLabel()
-        self.logo_label.setPixmap(self._logo.scaled(
-            64, 64, Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation))
-        layout.addWidget(self.logo_label)
-        titles = QVBoxLayout()
-        titles.setSpacing(3)
-        self.title_label = QLabel("Stavellum")
-        title_font = self.title_label.font()
-        title_font.setPointSize(23)
-        title_font.setBold(True)
-        title_font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 105)
-        self.title_label.setFont(title_font)
-        chip_row = QHBoxLayout()
-        chip_row.setSpacing(8)
-        chip_row.addWidget(self.title_label)
-        self.version_chip = QLabel(f"v{__version__}")
-        self.version_chip.setObjectName("VersionChip")
-        chip_row.addWidget(self.version_chip)
-        chip_row.addStretch(1)
-        titles.addLayout(chip_row)
-        self.tagline_label = QLabel(APPLICATION_DESCRIPTION)
-        self.tagline_label.setObjectName("Tagline")
-        titles.addWidget(self.tagline_label)
-        layout.addLayout(titles)
-        layout.addStretch(1)
-        # The header band doubles as the drag area; text must not eat clicks.
-        for child in (self, self.logo_label, self.title_label,
-                      self.tagline_label, self.version_chip):
-            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._file_icon = desktop_icon("file")
 
+    def sizeHint(self, option, index) -> QSize:
+        return QSize(0, 64)
 
-class _StaffArt:
-    """Static painter helpers for the right-side decorative score art."""
-
-    @staticmethod
-    def paint(painter: QPainter, width: int, height: int) -> None:
+    def paint(self, painter, option, index) -> None:
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        glow = QRadialGradient(QPointF(width * 0.82, height * 0.36), width * 0.45)
-        glow.setColorAt(0.0, QColor(88, 140, 255, 34))
-        glow.setColorAt(0.55, QColor(88, 140, 255, 12))
-        glow.setColorAt(1.0, QColor(0, 0, 0, 0))
-        painter.fillRect(QRectF(0, 0, width, height), glow)
-        # Five staff lines flowing down the right side of the page.
-        stroke = QLinearGradient(width * 0.52, 0, width, 0)
-        stroke.setColorAt(0.0, QColor(232, 236, 241, 0))
-        stroke.setColorAt(0.45, QColor(232, 236, 241, 34))
-        stroke.setColorAt(1.0, QColor(232, 236, 241, 10))
-        painter.setPen(QPen(stroke, 1.4))
-        for index in range(5):
-            offset = index * 15
-            line = QPainterPath()
-            start_y = height * (0.16 + 0.012 * index)
-            line.moveTo(width * 0.50, start_y + offset * 0.4)
-            line.cubicTo(width * 0.68, start_y - 60 + offset,
-                         width * 0.80, height * 0.62 + offset,
-                         width + 24, height * (0.52 + 0.05 * index) + offset)
-            painter.drawPath(line)
-        # A few luminous noteheads riding those lines.
-        notes = ((0.62, 0.24, 5.2), (0.70, 0.33, 4.2), (0.78, 0.47, 5.8),
-                 (0.86, 0.30, 3.6), (0.92, 0.58, 4.6))
-        for progress_x, progress_y, radius in notes:
-            x, y = width * progress_x, height * progress_y
-            halo = QRadialGradient(QPointF(x, y), radius * 3.2)
-            halo.setColorAt(0.0, QColor(237, 195, 152, 90))
-            halo.setColorAt(1.0, QColor(237, 195, 152, 0))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(halo)
-            painter.drawEllipse(QPointF(x, y), radius * 3.2, radius * 3.2)
-            painter.setBrush(QColor(240, 208, 170, 215))
-            painter.drawEllipse(QPointF(x, y), radius, radius)
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        rect = QRectF(option.rect).adjusted(1, 3, -1, -3)
+        painter.setPen(Qt.PenStyle.NoPen)
+        if selected or hovered:
+            painter.setBrush(QColor(_PANEL_HOVER))
+            painter.drawRoundedRect(rect, 6, 6)
+        title = str(index.data(Qt.ItemDataRole.DisplayRole)).split("\n", 1)[0]
+        path = str(index.data(Qt.ItemDataRole.UserRole))
+        text_rect = option.rect.adjusted(46, 10, -16, -10)
+        self._file_icon.paint(painter, option.rect.left() + 14, option.rect.top() + 22, 18, 18)
+        font = QFont(option.font)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(_TEXT if option.state & QStyle.StateFlag.State_Enabled else _MUTED))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                         painter.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, text_rect.width()))
+        font.setBold(False)
+        font.setPixelSize(11)
+        painter.setFont(font)
+        painter.setPen(QColor(_MUTED))
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft,
+                         painter.fontMetrics().elidedText(path, Qt.TextElideMode.ElideMiddle, text_rect.width()))
         painter.restore()
 
 
@@ -210,66 +159,47 @@ class WelcomePage(QWidget):
         self._has_document = False
         self.setObjectName("WelcomePage")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"""
-            QWidget#WelcomePage QWidget {{ color: {_TEXT}; font-size: 13px; }}
-            QLabel#Tagline {{ color: {_MUTED}; }}
-            QLabel#VersionChip {{
-                color: {_ACCENT}; border: 1px solid rgba(237, 195, 152, 90);
-                border-radius: 9px; padding: 1px 9px; font-size: 11px;
+        apply_desktop_theme(self)
+        self.setStyleSheet(DESKTOP_STYLESHEET + f"""
+            QWidget#WelcomePage {{ background: #10161e; }}
+            QLabel#StartBrand {{ color: {_MUTED}; font-size: 14px; }}
+            QLabel#StartTitle {{ color: {_TEXT}; font-size: 22px; font-weight: 600; }}
+            QLabel#SectionHeading {{ color: {_MUTED}; font-size: 12px; }}
+            QToolButton#StartAction {{
+                background: transparent; border: 1px solid {_PANEL_BORDER};
+                border-radius: 6px; padding: 5px 12px;
             }}
-            QLabel#SectionHeading {{
-                color: {_MUTED}; font-size: 12px;
-                letter-spacing: 2px;
-            }}
-            QWidget#WelcomePage QPushButton {{
-                color: {_TEXT}; background: {_PANEL}; border: 1px solid {_PANEL_BORDER};
-                border-radius: 8px; padding: 9px 16px;
-            }}
-            QWidget#WelcomePage QPushButton:hover {{ background: {_PANEL_HOVER}; }}
-            QWidget#WelcomePage QPushButton:disabled {{ color: #66717e; }}
-            QWidget#WelcomePage QPushButton:disabled:hover {{ background: {_PANEL}; }}
-            QPushButton#CreateProject {{
-                color: {_ACCENT_TEXT}; background: {_ACCENT}; border-color: {_ACCENT};
-                font-size: 14px; font-weight: 600; padding: 11px 26px;
-            }}
-            QPushButton#CreateProject:hover {{ background: {_ACCENT_HOVER}; }}
-            QPushButton#CreateProject:disabled {{
-                color: #6d6355; background: #4a4237; border-color: #4a4237;
-            }}
-            QPushButton#OpenProject {{ font-size: 14px; padding: 11px 22px; }}
+            QToolButton#StartAction:hover {{ background: {_PANEL_HOVER}; border-color: #718197; }}
+            QToolButton#StartAction:focus {{ border-color: {_ACCENT}; }}
+            QToolButton#StartAction:disabled {{ color: #768496; border-color: {_PANEL_BORDER}; }}
             QPushButton#LinkButton {{
-                background: transparent; border: 0; color: {_MUTED}; padding: 4px 2px;
+                background: transparent; border: 1px solid transparent;
+                color: {_MUTED}; padding: 4px 2px;
             }}
             QPushButton#LinkButton:hover {{ color: {_TEXT}; }}
-            QPushButton#AccentLink {{
-                background: transparent; border: 0; color: {_ACCENT}; padding: 4px 2px;
-            }}
-            QPushButton#AccentLink:hover {{ color: {_ACCENT_HOVER}; }}
+            QPushButton#LinkButton:focus {{ border-color: {_ACCENT}; }}
             QToolButton#WindowButton {{
-                background: transparent; border: 0; border-radius: 7px;
-                color: {_MUTED}; font-size: 13px; padding: 3px 9px;
+                background: transparent; border: 0; border-radius: 5px;
+                color: {_MUTED}; font-size: 15px; padding: 0;
             }}
             QToolButton#WindowButton:hover {{ background: {_PANEL_HOVER}; color: {_TEXT}; }}
-            QListWidget#RecentList {{
-                background: transparent; border: 0; outline: 0;
-            }}
-            QListWidget#RecentList::item {{
-                background: {_PANEL}; border: 1px solid {_PANEL_BORDER};
-                border-radius: 10px; padding: 10px 14px; margin: 3px 0;
-            }}
-            QListWidget#RecentList::item:hover {{ background: {_PANEL_HOVER}; }}
-            QListWidget#RecentList::item:selected {{
-                background: #232e3b; border: 1px solid rgba(237, 195, 152, 130);
-            }}
-            QProgressBar {{
-                background: {_PANEL}; border: 1px solid {_PANEL_BORDER};
-                border-radius: 4px; max-height: 6px;
-            }}
-            QProgressBar::chunk {{ background: {_ACCENT}; border-radius: 4px; }}
+            QListWidget#RecentList {{ background: transparent; border: 0; padding: 0; }}
         """)
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(18, 10, 18, 16)
         root.setSpacing(0)
+        chrome = QHBoxLayout()
+        chrome.setSpacing(4)
+        self.header = QLabel("Stavellum")
+        self.header.setObjectName("StartBrand")
+        self.header.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        chrome.addWidget(self.header)
+        chrome.addStretch(1)
+        self.minimize_button = self._window_button("—", "最小化", self.showMinimized)
+        self.close_button = self._window_button("×", "关闭", self._close)
+        chrome.addWidget(self.minimize_button)
+        chrome.addWidget(self.close_button)
+        root.addLayout(chrome)
         self.pages = QStackedWidget()
         root.addWidget(self.pages, 1)
         self.pages.addWidget(self._build_main_page())
@@ -281,23 +211,9 @@ class WelcomePage(QWidget):
 
     # --- painting and window chrome -------------------------------------
 
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        background = QLinearGradient(0, 0, 0, self.height())
-        background.setColorAt(0.0, _BACKGROUND_TOP)
-        background.setColorAt(1.0, _BACKGROUND_BOTTOM)
-        painter.fillRect(self.rect(), background)
-        _StaffArt.paint(painter, self.width(), self.height())
-
     def mousePressEvent(self, event) -> None:
-        position = event.position()
-        # Drag from the header band or the decorative right zone; interactive
-        # widgets swallow their own clicks before this handler runs.
-        decorative = position.x() > self.width() - 320
         if (event.button() == Qt.MouseButton.LeftButton
-                and (position.y() < 104 or decorative)
-                and self.windowHandle() is not None):
+                and event.position().y() < 52 and self.windowHandle() is not None):
             self.windowHandle().startSystemMove()
         super().mousePressEvent(event)
 
@@ -306,6 +222,8 @@ class WelcomePage(QWidget):
         button.setObjectName("WindowButton")
         button.setText(glyph)
         button.setToolTip(tip)
+        button.setAccessibleName(tip)
+        button.setFixedSize(30, 28)
         button.clicked.connect(handler)
         return button
 
@@ -314,99 +232,108 @@ class WelcomePage(QWidget):
 
     # --- page construction -----------------------------------------------
 
+    def _start_action(self, icon: str, title: str, handler) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("StartAction")
+        button.setText(title)
+        button.setIcon(desktop_icon(icon))
+        button.setIconSize(QSize(18, 18))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setFixedHeight(34)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(title)
+        button.setAccessibleName(title)
+        button.clicked.connect(handler)
+        return button
+
     def _build_main_page(self) -> QWidget:
         page = QWidget()
-        page.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 26, 26, 14)
+        page_layout = QHBoxLayout(page)
+        page_layout.setContentsMargins(36, 32, 36, 6)
+        workspace = QWidget()
+        workspace.setMinimumWidth(640)
+        workspace.setMaximumWidth(780)
+        page_layout.addStretch(1)
+        page_layout.addWidget(workspace, 3)
+        page_layout.addStretch(1)
+        layout = QVBoxLayout(workspace)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        header = QHBoxLayout()
-        header.setSpacing(12)
-        self.header = _BrandHeader()
-        header.addWidget(self.header, 1)
-        self.minimize_button = self._window_button("—", "最小化", self.showMinimized)
-        self.close_button = self._window_button("✕", "关闭", self._close)
-        header.addWidget(self.minimize_button)
-        header.addWidget(self.close_button)
-        layout.addLayout(header)
-        layout.addSpacing(26)
+        title = QLabel("开始创作")
+        title.setObjectName("StartTitle")
+        layout.addWidget(title)
+        layout.addSpacing(6)
+        subtitle = QLabel("新建工程，或继续最近的作品。")
+        subtitle.setObjectName("Tagline")
+        layout.addWidget(subtitle)
+        layout.addSpacing(22)
 
         actions = QHBoxLayout()
-        actions.setSpacing(12)
-        self.new_button = QPushButton("新建工程")
-        self.new_button.setObjectName("CreateProject")
-        self.new_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.new_button.clicked.connect(lambda: self._emit(self.new_requested))
-        self.open_button = QPushButton("打开工程…")
-        self.open_button.setObjectName("OpenProject")
-        self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.open_button.clicked.connect(lambda: self._emit(self.open_requested))
+        actions.setSpacing(8)
+        self.new_button = self._start_action("new", "新建工程", lambda: self._emit(self.new_requested))
+        self.new_button.setShortcut("Ctrl+N")
+        self.new_button.setToolTip("新建工程 (Ctrl+N)")
+        self.open_button = self._start_action("open", "打开工程", lambda: self._emit(self.open_requested))
+        self.open_button.setShortcut("Ctrl+O")
+        self.open_button.setToolTip("打开工程 (Ctrl+O)")
         actions.addWidget(self.new_button)
         actions.addWidget(self.open_button)
         actions.addStretch(1)
-        layout.addLayout(actions)
-        layout.addSpacing(10)
-
-        links = QHBoxLayout()
-        links.setSpacing(18)
-        self.demo_button = QPushButton("生成示例工程")
-        self.demo_button.setObjectName("AccentLink")
+        self.demo_button = QPushButton("试用示例")
+        self.demo_button.setObjectName("LinkButton")
         self.demo_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.demo_button.clicked.connect(lambda: self._emit(self.demo_requested))
+        actions.addWidget(self.demo_button)
+        layout.addLayout(actions)
+        layout.addSpacing(28)
+
+        heading_row = QHBoxLayout()
+        self.list_heading = QLabel("最近工程")
+        self.list_heading.setObjectName("SectionHeading")
+        heading_row.addWidget(self.list_heading)
+        heading_row.addStretch(1)
         self.resume_button = QPushButton("返回编辑器")
         self.resume_button.setObjectName("LinkButton")
         self.resume_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.resume_button.clicked.connect(lambda: self._emit(self.resume_requested))
         self.resume_button.hide()
-        links.addWidget(self.demo_button)
-        links.addWidget(self.resume_button)
-        links.addStretch(1)
-        layout.addLayout(links)
-        layout.addSpacing(24)
-
-        heading_row = QHBoxLayout()
-        self.list_heading = QLabel("最近打开")
-        self.list_heading.setObjectName("SectionHeading")
-        heading_row.addWidget(self.list_heading)
-        heading_row.addStretch(1)
+        heading_row.addWidget(self.resume_button)
         layout.addLayout(heading_row)
-        layout.addSpacing(2)
+        layout.addSpacing(8)
 
         self.recent_list = QListWidget()
         self.recent_list.setObjectName("RecentList")
         self.recent_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.recent_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.recent_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.recent_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.recent_list.setItemDelegate(_RecentProjectDelegate(self.recent_list))
         self.recent_list.setAccessibleName("最近工程")
-        self.recent_list.setSpacing(2)
+        self.recent_list.setSpacing(0)
         self.recent_list.setCursor(Qt.CursorShape.PointingHandCursor)
         self.recent_list.itemActivated.connect(self._activate_recent)
         self.recent_list.currentItemChanged.connect(self._selection_changed)
         layout.addWidget(self.recent_list, 1)
 
-        self.empty_label = QLabel("还没有最近工程。\n新建工程，或打开已有的 .stproj 开始。")
+        self.empty_label = QLabel("还没有最近工程\n新建工程，或打开已有的 .stproj 文件。")
         self.empty_label.setObjectName("Tagline")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_label.setWordWrap(True)
         layout.addWidget(self.empty_label, 1)
+        layout.addSpacing(10)
 
         footer = QHBoxLayout()
         self.path_label = QLabel("成功打开或保存的工程会出现在这里。")
         self.path_label.setObjectName("Tagline")
         self.path_label.setTextFormat(Qt.TextFormat.PlainText)
         self.path_label.setWordWrap(True)
-        self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         footer.addWidget(self.path_label, 1)
-        self.selected_button = QPushButton("打开所选工程")
-        self.selected_button.clicked.connect(self._activate_selection)
+        self.selected_button = self._start_action("open", "打开所选", self._activate_selection)
         self.selected_button.setEnabled(False)
         footer.addWidget(self.selected_button)
-        layout.addSpacing(8)
         layout.addLayout(footer)
-        layout.addSpacing(10)
+        layout.addSpacing(16)
 
-        task_row = QHBoxLayout()
-        task_row.setSpacing(12)
         self.task_status = QWidget()
         task_inner = QHBoxLayout(self.task_status)
         task_inner.setContentsMargins(0, 0, 0, 0)
@@ -421,8 +348,7 @@ class WelcomePage(QWidget):
         task_inner.addWidget(self.job_label, 0)
         task_inner.addWidget(self.progress, 1)
         task_inner.addWidget(self.cancel_task_button, 0)
-        task_row.addWidget(self.task_status, 1)
-        layout.addLayout(task_row)
+        layout.addWidget(self.task_status)
         self.task_status.hide()
 
         bottom = QHBoxLayout()
@@ -436,9 +362,9 @@ class WelcomePage(QWidget):
         bottom.addWidget(guide_button)
         bottom.addWidget(about_button)
         bottom.addStretch(1)
-        version = QLabel(f"Stavellum v{__version__}")
-        version.setObjectName("Tagline")
-        bottom.addWidget(version)
+        self.version_label = QLabel(f"v{__version__}")
+        self.version_label.setObjectName("Tagline")
+        bottom.addWidget(self.version_label)
         layout.addLayout(bottom)
         return page
 
@@ -453,11 +379,12 @@ class WelcomePage(QWidget):
         layout.setContentsMargins(30, 26, 30, 20)
         layout.setSpacing(14)
         back = QPushButton("← 返回")
-        back.setObjectName("AccentLink")
+        back.setObjectName("LinkButton")
         back.setCursor(Qt.CursorShape.PointingHandCursor)
         back.clicked.connect(lambda: self.pages.setCurrentIndex(0))
         layout.addWidget(back)
         heading = QLabel(title)
+        heading.setObjectName("PanelTitle")
         heading_font = heading.font()
         heading_font.setPointSize(18)
         heading_font.setBold(True)
@@ -540,9 +467,11 @@ class WelcomePage(QWidget):
         item = self.recent_list.currentItem()
         self.selected_button.setEnabled(item is not None and not self._busy)
         if item is not None:
-            self.path_label.setText(item.data(Qt.ItemDataRole.UserRole))
+            self.path_label.setText("双击工程，或按 Enter 打开。")
+            self.path_label.setToolTip(item.data(Qt.ItemDataRole.UserRole))
         else:
             self.path_label.setText("成功打开或保存的工程会出现在这里。")
+            self.path_label.setToolTip("")
 
     def _activate_recent(self, item: QListWidgetItem) -> None:
         if not self._busy:

@@ -134,17 +134,35 @@ def test_welcome_page_paints_dark_chrome_at_common_sizes(app, width, height):
     assert page.new_button.geometry().right() < width
     image = page.grab().toImage()
     assert not image.isNull()
-    # The painted gradient starts at the page's dark chrome color.
-    assert image.pixelColor(2, 2).name().lower() in ("#1b222c", "#1a212c")
+    assert image.pixelColor(2, 2).name().lower() == "#10161e"
     page.deleteLater()
     app.processEvents()
 
 
-def test_brand_header_carries_logo_and_version(app):
+def test_start_page_carries_compact_name_and_version(app):
     page = WelcomePage()
-    header = page.header
-    assert not header._logo.isNull()
-    assert header.version_chip.text() == f"v{__version__}"
-    assert header.title_label.text() == "Stavellum"
+    assert page.header.text() == "Stavellum"
+    assert page.version_label.text() == f"v{__version__}"
+    page.deleteLater()
+    app.processEvents()
+
+
+def test_all_recent_projects_are_reachable_in_small_window(app, tmp_path):
+    page = WelcomePage()
+    page.resize(900, 620)
+    paths = [str(tmp_path / f"project-{number}.stproj") for number in range(10)]
+    page.set_recent_projects(paths)
+    page.show()
+    app.processEvents()
+    assert page.recent_list.verticalScrollBar().maximum() > 0
+    page.recent_list.setFocus()
+    QTest.keyClick(page.recent_list, Qt.Key.Key_End)
+    app.processEvents()
+    last = page.recent_list.item(9)
+    assert page.recent_list.currentItem() is last
+    assert page.recent_list.viewport().rect().contains(page.recent_list.visualItemRect(last).center())
+    spy = QSignalSpy(page.project_requested)
+    QTest.keyClick(page.recent_list, Qt.Key.Key_Return)
+    assert spy.at(0) == [paths[-1]]
     page.deleteLater()
     app.processEvents()
