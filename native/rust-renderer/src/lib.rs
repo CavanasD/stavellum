@@ -107,7 +107,11 @@ static FRAME_POOL: Mutex<FramePool> = Mutex::new(FramePool {
 
 fn pooled_frame(size: usize) -> Vec<u8> {
     if let Ok(mut pool) = FRAME_POOL.lock() {
-        if let Some(position) = pool.spare.iter().rposition(|frame| frame.capacity() >= size) {
+        if let Some(position) = pool
+            .spare
+            .iter()
+            .rposition(|frame| frame.capacity() >= size)
+        {
             let mut frame = pool.spare.swap_remove(position);
             pool.bytes -= frame.capacity();
             frame.clear();
@@ -153,8 +157,7 @@ fn guarded(operation: impl FnOnce() -> Result<(), String>) -> i32 {
     };
     let status = i32::from(error.is_some());
     ERROR.with(|slot| {
-        *slot.borrow_mut() =
-            CString::new(error.unwrap_or_default().replace('\0', " ")).unwrap();
+        *slot.borrow_mut() = CString::new(error.unwrap_or_default().replace('\0', " ")).unwrap();
     });
     status
 }
@@ -177,8 +180,8 @@ struct Gpu {
 
 impl Gpu {
     fn create() -> Result<Self, String> {
-        let entry =
-            unsafe { ash::Entry::load() }.map_err(|error| format!("Cannot load the Vulkan loader: {error}"))?;
+        let entry = unsafe { ash::Entry::load() }
+            .map_err(|error| format!("Cannot load the Vulkan loader: {error}"))?;
         let application = vk::ApplicationInfo::default()
             .application_name(c"stavellum")
             .api_version(vk::make_api_version(0, 1, 0, 0));
@@ -228,19 +231,18 @@ impl Gpu {
             .to_owned()
         })?;
         let properties = unsafe { instance.get_physical_device_properties(physical) };
-        let families =
-            unsafe { instance.get_physical_device_queue_family_properties(physical) };
+        let families = unsafe { instance.get_physical_device_queue_family_properties(physical) };
         let queue_family = families
             .iter()
             .position(|family| family.queue_flags.contains(vk::QueueFlags::GRAPHICS))
-            .ok_or_else(|| "Cannot initialize requested RHI backend".to_owned())? as u32;
+            .ok_or_else(|| "Cannot initialize requested RHI backend".to_owned())?
+            as u32;
         let priorities = [1.0f32];
         let queue_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(queue_family)
             .queue_priorities(&priorities);
         let queue_infos = [queue_info];
-        let device_info =
-            vk::DeviceCreateInfo::default().queue_create_infos(&queue_infos);
+        let device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_infos);
         let device = unsafe { instance.create_device(physical, &device_info, None) }
             .map_err(|_| "Cannot initialize requested RHI backend".to_owned())?;
         let queue = unsafe { device.get_device_queue(queue_family, 0) };
@@ -348,7 +350,14 @@ impl HostBuffer {
                 .map_err(|_| "Cannot create RHI host buffer".to_owned())?;
             (buffer, memory, pointer.cast::<u8>())
         };
-        Ok(Self { buffer, memory, pointer, capacity, usage, memory_type })
+        Ok(Self {
+            buffer,
+            memory,
+            pointer,
+            capacity,
+            usage,
+            memory_type,
+        })
     }
 
     fn ensure(&mut self, gpu: &Gpu, needed: vk::DeviceSize) -> Result<(), String> {
@@ -511,7 +520,11 @@ impl Renderer {
             bgra || usable(vk::Format::R8G8B8A8_UNORM),
             "Requested RHI backend cannot provide 4xMSAA",
         )?;
-        let format = if bgra { vk::Format::B8G8R8A8_UNORM } else { vk::Format::R8G8B8A8_UNORM };
+        let format = if bgra {
+            vk::Format::B8G8R8A8_UNORM
+        } else {
+            vk::Format::R8G8B8A8_UNORM
+        };
 
         let sampler = unsafe {
             let info = vk::SamplerCreateInfo::default()
@@ -534,8 +547,8 @@ impl Renderer {
         };
         let msaa_attachment =
             attachment(vk::SampleCountFlags::TYPE_4).load_op(vk::AttachmentLoadOp::CLEAR);
-        let resolve_attachment = attachment(vk::SampleCountFlags::TYPE_1)
-            .store_op(vk::AttachmentStoreOp::STORE);
+        let resolve_attachment =
+            attachment(vk::SampleCountFlags::TYPE_1).store_op(vk::AttachmentStoreOp::STORE);
         let color_reference = vk::AttachmentReference::default()
             .attachment(0)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
@@ -598,7 +611,8 @@ impl Renderer {
             device.create_shader_module(&vk::ShaderModuleCreateInfo::default().code(words), None)
         };
         let vertex = module(VERTEX).map_err(|_| "Cannot create RHI vertex shader".to_owned())?;
-        let fragment = module(FRAGMENT).map_err(|_| "Cannot create RHI fragment shader".to_owned())?;
+        let fragment =
+            module(FRAGMENT).map_err(|_| "Cannot create RHI fragment shader".to_owned())?;
         let vertex_entry = c"vs_main";
         let fragment_entry = c"fs_main";
         let stages = [
@@ -648,8 +662,7 @@ impl Renderer {
             .alpha_blend_op(vk::BlendOp::ADD)
             .color_write_mask(vk::ColorComponentFlags::RGBA);
         let blends = [blend];
-        let color_blend =
-            vk::PipelineColorBlendStateCreateInfo::default().attachments(&blends);
+        let color_blend = vk::PipelineColorBlendStateCreateInfo::default().attachments(&blends);
         let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
             .stages(&stages)
             .vertex_input_state(&vertex_input)
@@ -660,15 +673,21 @@ impl Renderer {
             .color_blend_state(&color_blend)
             .layout(pipeline_layout)
             .render_pass(pass);
-        let pipelines = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None) }
-            .map_err(|_| "Cannot create RHI graphics pipeline".to_owned())?;
+        let pipelines = unsafe {
+            device.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
+        }
+        .map_err(|_| "Cannot create RHI graphics pipeline".to_owned())?;
         let pipeline = pipelines[0];
         unsafe {
             device.destroy_shader_module(fragment, None);
             device.destroy_shader_module(vertex, None);
         }
 
-        let extent = vk::Extent3D { width, height, depth: 1 };
+        let extent = vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        };
         let create_image = |samples, usage| unsafe {
             let info = vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
@@ -722,7 +741,8 @@ impl Renderer {
             )
         };
         let msaa_view = view(msaa).map_err(|_| "Cannot create RHI render target".to_owned())?;
-        let resolve_view = view(resolve).map_err(|_| "Cannot create RHI render target".to_owned())?;
+        let resolve_view =
+            view(resolve).map_err(|_| "Cannot create RHI render target".to_owned())?;
         let framebuffer = unsafe {
             device.create_framebuffer(
                 &vk::FramebufferCreateInfo::default()
@@ -830,8 +850,15 @@ impl Renderer {
     }
 
     fn texture_bytes(&self) -> u64 {
-        self.textures.values().map(|texture| texture.bytes).sum::<u64>()
-            + self.pending.iter().map(|(_, upload)| upload.data.len() as u64).sum::<u64>()
+        self.textures
+            .values()
+            .map(|texture| texture.bytes)
+            .sum::<u64>()
+            + self
+                .pending
+                .iter()
+                .map(|(_, upload)| upload.data.len() as u64)
+                .sum::<u64>()
     }
 
     fn upload(
@@ -872,7 +899,11 @@ impl Renderer {
         self.stats.uploaded_bytes += bytes;
         self.pending.push((
             id,
-            PendingUpload { width: width as u32, height: height as u32, data },
+            PendingUpload {
+                width: width as u32,
+                height: height as u32,
+                data,
+            },
         ));
         self.stats.upload_seconds += started.elapsed().as_secs_f64();
         Ok(())
@@ -943,8 +974,7 @@ impl Renderer {
         let image_info = vk::DescriptorImageInfo::default()
             .image_view(view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-        let sampler_info =
-            vk::DescriptorImageInfo::default().sampler(self.sampler);
+        let sampler_info = vk::DescriptorImageInfo::default().sampler(self.sampler);
         unsafe {
             self.gpu.device.update_descriptor_sets(
                 &[
@@ -984,8 +1014,11 @@ impl Renderer {
         let mut placed = Vec::new();
         let mut offset = 0 as vk::DeviceSize;
         while let Some((id, upload)) = pending.pop() {
-            let extent =
-                vk::Extent3D { width: upload.width, height: upload.height, depth: 1 };
+            let extent = vk::Extent3D {
+                width: upload.width,
+                height: upload.height,
+                depth: 1,
+            };
             let (image, memory, view) = {
                 let device = &self.gpu.device;
                 let info = vk::ImageCreateInfo::default()
@@ -1065,7 +1098,8 @@ impl Renderer {
             require(frame.len() <= MAX_QUADS, "Too many frame commands")?;
             for quad in *frame {
                 require(
-                    self.textures.contains_key(&quad.texture_id) || self.has_pending_texture(&quad.texture_id),
+                    self.textures.contains_key(&quad.texture_id)
+                        || self.has_pending_texture(&quad.texture_id),
                     "Frame refers to missing texture",
                 )?;
                 let values = &quad.values;
@@ -1169,10 +1203,12 @@ impl Renderer {
             let layers = vk::ImageSubresourceLayers::default()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .layer_count(1);
-            let range = || vk::ImageSubresourceRange::default()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .level_count(1)
-                .layer_count(1);
+            let range = || {
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .level_count(1)
+                    .layer_count(1)
+            };
             for (id, offset, width, height) in &uploads {
                 let texture = &self.textures[id];
                 device.cmd_pipeline_barrier(
@@ -1200,7 +1236,11 @@ impl Renderer {
                         .buffer_row_length(0)
                         .buffer_image_height(0)
                         .image_subresource(layers)
-                        .image_extent(vk::Extent3D { width: *width, height: *height, depth: 1 })],
+                        .image_extent(vk::Extent3D {
+                            width: *width,
+                            height: *height,
+                            depth: 1,
+                        })],
                 );
                 device.cmd_pipeline_barrier(
                     command,
@@ -1228,7 +1268,9 @@ impl Renderer {
             );
             for (index, frame_runs) in runs.iter().enumerate() {
                 let clear = vk::ClearValue {
-                    color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 1.0] },
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
                 };
                 device.cmd_begin_render_pass(
                     command,
@@ -1284,7 +1326,11 @@ impl Renderer {
                         .buffer_row_length(self.width)
                         .buffer_image_height(self.height)
                         .image_subresource(layers)
-                        .image_extent(vk::Extent3D { width: self.width, height: self.height, depth: 1 })],
+                        .image_extent(vk::Extent3D {
+                            width: self.width,
+                            height: self.height,
+                            depth: 1,
+                        })],
                 );
                 device.cmd_pipeline_barrier(
                     command,
@@ -1397,9 +1443,17 @@ impl Renderer {
         let copy_path = if owned > 0 && copied > 0 {
             "mixed-owned-and-copy"
         } else if owned > 0 {
-            if self.bgra { "bgra-owned-buffer" } else { "rgba-inplace-sse2-swizzle" }
+            if self.bgra {
+                "bgra-owned-buffer"
+            } else {
+                "rgba-inplace-sse2-swizzle"
+            }
         } else if copied > 0 {
-            if self.bgra { "bgra-memcpy" } else { "rgba-sse2-swizzle" }
+            if self.bgra {
+                "bgra-memcpy"
+            } else {
+                "rgba-sse2-swizzle"
+            }
         } else {
             "not-submitted"
         };
@@ -1479,13 +1533,16 @@ unsafe fn swizzle_avx2(pointer: *mut u8, bytes: usize) {
         _mm256_loadu_si256, _mm256_setr_epi8, _mm256_shuffle_epi8, _mm256_storeu_si256,
     };
     let shuffle = _mm256_setr_epi8(
-        2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15,
-        2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15,
+        2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15, 2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11,
+        14, 13, 12, 15,
     );
     let mut offset = 0;
     while offset + 32 <= bytes {
         let block = _mm256_loadu_si256(pointer.add(offset) as *const _);
-        _mm256_storeu_si256(pointer.add(offset) as *mut _, _mm256_shuffle_epi8(block, shuffle));
+        _mm256_storeu_si256(
+            pointer.add(offset) as *mut _,
+            _mm256_shuffle_epi8(block, shuffle),
+        );
         offset += 32;
     }
     let tail = pointer.add(offset);
@@ -1606,7 +1663,11 @@ pub unsafe extern "C" fn sprhi_upload(
     stride: i32,
     pixels: *const u8,
 ) -> i32 {
-    guarded(|| with_renderer(pointer, |renderer| renderer.upload(id, width, height, stride, pixels)))
+    guarded(|| {
+        with_renderer(pointer, |renderer| {
+            renderer.upload(id, width, height, stride, pixels)
+        })
+    })
 }
 
 /// # Safety
@@ -1686,7 +1747,10 @@ pub unsafe extern "C" fn sprhi_submit_batch_owned(
             (1..=MAX_BATCH).contains(&count),
             "Batch frame count must be between 1 and 8",
         )?;
-        require(!items.is_null() && !frames.is_null(), "Null batch item array")?;
+        require(
+            !items.is_null() && !frames.is_null(),
+            "Null batch item array",
+        )?;
         with_renderer(pointer, |renderer| {
             let timing = Instant::now();
             let raw = slice::from_raw_parts(items, count);

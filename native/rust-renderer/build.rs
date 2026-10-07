@@ -31,8 +31,11 @@ fn main() {
             }),
         )
         .unwrap_or_else(|error| panic!("write {entry} SPIR-V: {error:?}"));
-        fs::write(out.join(format!("quad.{entry}.words")), format!("{words:?}"))
-            .unwrap_or_else(|error| panic!("write words file: {error}"));
+        fs::write(
+            out.join(format!("quad.{entry}.words")),
+            format!("{words:?}"),
+        )
+        .unwrap_or_else(|error| panic!("write words file: {error}"));
     }
     println!("cargo:rerun-if-changed=src/shaders/quad.wgsl");
 }
