@@ -1,9 +1,10 @@
 # 桌面 UI 与 PR 规范：Review 记录
 
-PR 标题：`feat(ui): 精简桌面界面并完善启动与 PR 工作流`
+PR 标题：`feat: 引入 Rust 原生后端并精简桌面 UI`
 
-依赖 [Rust 迁移基础 PR #1](https://github.com/CavanasD/stavellum/pull/1)。
-本次 UI 分支基于 `feat/rust-vulkan-migration`，Rust 格式化提交已归入基础分支。
+最终提交至上游 [Creeper19472/stavellum](https://github.com/Creeper19472/stavellum) 的 `main`。
+本记录主要说明 UI 新增部分；上游 PR 同时包含此前的 Rust 迁移和独立的格式化提交。
+本地保留 `feat/rust-vulkan-migration` 阶段分支，原 fork 中的两份草稿由上游 PR 取代。
 
 ## 问题与结果
 
