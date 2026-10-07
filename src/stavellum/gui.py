@@ -902,7 +902,7 @@ class MainWindow(QMainWindow):
                                        icon_assets=copy.deepcopy(old.icon_assets))
         else:
             document = ProjectDocument(project, suggested, metadata=Metadata(title=project.name))
-        self.set_document(document)
+        self.set_document(document, self.project_path if old else "")
         self._dirty = True
         self._update_title()
 

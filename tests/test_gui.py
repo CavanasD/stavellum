@@ -14,7 +14,13 @@ import pytest
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtWidgets import QApplication, QComboBox, QGroupBox, QScrollArea
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QScrollArea,
+)
 
 from stavellum import gui as gui_module
 from stavellum.background import BackgroundJob
@@ -148,6 +154,25 @@ def test_embedded_icon_survives_merge_split_and_reimport(window):
     assert window.document.icon_assets == {reference[6:]: asset}
     assert all(mapping.icon == reference for mapping in window.document.mappings[:2])
     assert all(not mapping.use_icon for mapping in window.document.mappings[:2])
+
+
+def test_reimport_keeps_saved_project_path_and_saves_back_to_original(window, tmp_path, monkeypatch):
+    path = tmp_path / "original.stproj"
+    save_document(window.document, path)
+    window.project_path = str(path)
+    source = copy.deepcopy(window.document.project)
+    source.name = "重新导入"
+    window._job = SimpleNamespace(reimporting=True)
+    try:
+        window._source_imported(source)
+    finally:
+        window._job = None
+    assert window.project_path == str(path)
+    assert window._dirty
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args: pytest.fail("unexpected Save As"))
+    assert window.save_project()
+    assert load_document(path).project.name == "重新导入"
+    assert not window._dirty
 
 
 @pytest.mark.parametrize("accepted", [True, False])
