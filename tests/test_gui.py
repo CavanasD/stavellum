@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QGroupBox,
+    QMessageBox,
     QScrollArea,
 )
 
@@ -805,6 +806,27 @@ def test_keyboard_seek_updates_frame_without_recursive_transport_updates(window,
     window._update_transport()
     assert window.seek.value() == 2000
     assert times == [0.1, 1.1]
+
+
+def test_failed_preview_result_shows_failure_and_preserves_previous_preview(window, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: QMessageBox.StandardButton.Ok)
+    previous = SimpleNamespace()
+    window.renderer = previous
+    document = window.document
+    window._job = SimpleNamespace(operation="compile", _cancel_requested_at=None,
+                                  deleteLater=lambda: None)
+    window.preview_status.setText("正在准备预览…")
+
+    def fail_to_apply(_scene):
+        raise RuntimeError("render initialization failed")
+
+    window._job_result(fail_to_apply, None)
+    window._job_finished()
+    assert "失败" in window.preview_status.text()
+    assert window.job_label.text() == "任务失败"
+    assert "render initialization failed" in window._last_error
+    assert window.renderer is previous and window.document is document
+    assert window.compile_button.isEnabled()
 
 
 class _ClockPlayer:
