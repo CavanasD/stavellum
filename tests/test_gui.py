@@ -14,6 +14,7 @@ import pytest
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QMediaPlayer
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -773,6 +774,37 @@ def test_seek_requests_absolute_frame_time(window):
     assert renderer.times == [2.0, 0.5, 2.0]
     assert not window.preview.frame.isNull()
     assert window.seek.value() == 2000
+
+
+def test_keyboard_seek_updates_frame_without_recursive_transport_updates(window, app):
+    times = []
+
+    def render(seconds):
+        times.append(seconds)
+        frame = QImage(320, 240, QImage.Format.Format_RGB32)
+        frame.fill(QColor("black"))
+        return frame
+
+    window.renderer = SimpleNamespace(
+        scene=SimpleNamespace(score_duration=window.document.project.duration_seconds,
+                              settings=window.document.settings),
+        render_frame=render,
+    )
+    window._update_actions()
+    window._update_transport()
+    window.show()
+    app.processEvents()
+    window.seek.setFocus()
+    QTest.keyClick(window.seek, Qt.Key.Key_Right)
+    assert window._position == pytest.approx(0.1)
+    assert times == [0.1]
+    QTest.keyClick(window.seek, Qt.Key.Key_PageUp)
+    assert window._position == pytest.approx(1.1)
+    assert times == [0.1, 1.1]
+    window._position = 2.0
+    window._update_transport()
+    assert window.seek.value() == 2000
+    assert times == [0.1, 1.1]
 
 
 class _ClockPlayer:

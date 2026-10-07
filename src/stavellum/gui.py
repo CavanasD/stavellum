@@ -253,7 +253,10 @@ class MainWindow(QMainWindow):
         self.play_button.clicked.connect(self.toggle_playback)
         self.seek = QSlider(Qt.Orientation.Horizontal)
         self.seek.setRange(0, 0)
-        self.seek.sliderMoved.connect(self.seek_to_milliseconds)
+        self.seek.setAccessibleName("预览时间轴")
+        self.seek.setSingleStep(100)
+        self.seek.setPageStep(1000)
+        self.seek.valueChanged.connect(self.seek_to_milliseconds)
         self.seek.sliderPressed.connect(self._pause_for_seek)
         self.seek.sliderReleased.connect(lambda: self.seek_to_milliseconds(self.seek.value()))
         self.time_label = QLabel("00:00.00 / 00:00.00")
@@ -1616,9 +1619,11 @@ class MainWindow(QMainWindow):
 
     def _update_transport(self, *args: Any) -> None:
         duration = self._duration()
+        blocker = QSignalBlocker(self.seek)
         self.seek.setRange(0, math.ceil(duration * 1000))
         if not self.seek.isSliderDown():
             self.seek.setValue(round(self._position * 1000))
+        del blocker
         self.time_label.setText(f"{_seconds_label(self._position)} / {_seconds_label(duration)}")
 
     def toggle_playback(self) -> None:
