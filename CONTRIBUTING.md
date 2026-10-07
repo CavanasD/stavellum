@@ -59,7 +59,8 @@ Qt C++ 后端变更另按 [docs/rust-renderer.md](docs/rust-renderer.md) 构建�
 新增或更新依赖需同步锁文件与适用的第三方许可。
 
 UI 截图可用 `uv run python scripts/preview_ui.py --output artifacts/ui-preview` 生成。
-脚本使用独立设置与实际示例谱面，包含欢迎页空态/最近工程、编辑器各页、较小窗口和新建向导。
+脚本使用独立设置与实际示例谱面，包含启动封面、欢迎页空态/最近工程、编辑器各页、较小窗口和新建向导。
+公开 PR 截图加 `--public-paths`，将示例中的本机路径替换为公开占位路径。
 设置 `QT_SCALE_FACTOR=1.25` 或 `1.5` 后再次运行，可检查不同缩放比例。
 
 ## Review 与合并条件

@@ -156,6 +156,10 @@ For more information, see [FLP / MIDI Import Guide](docs/importing.md).
 
 ## Development and Dependencies
 
+See [Contributing and PR guidelines](CONTRIBUTING.md) for title conventions,
+review criteria and required validation. Capture the actual desktop UI with
+`uv run python scripts/preview_ui.py --output artifacts/ui-preview`.
+
 ```powershell
 uv run python scripts/build_rust.py --install
 uv run pytest -q

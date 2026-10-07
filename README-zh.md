@@ -156,6 +156,9 @@ uv run stavellum parts "song.stproj" --output artifacts/parts
 
 ## 开发与依赖
 
+PR 标题、描述模板、Review 要点与验证要求见 [贡献与 PR 规范](CONTRIBUTING.md)。
+运行 `uv run python scripts/preview_ui.py --output artifacts/ui-preview` 可生成实际桌面界面的截图。
+
 原生 Vulkan 合成器已用 Rust（`ash` 直连 Vulkan）完全重写，位于
 `native/rust-renderer`：实例化四边形绘制、相邻纹理合并、4×MSAA、持久映射
 HOST_CACHED 回读缓冲、紧凑行读取（无除距拷贝）、一次提交渲染整批帧，
