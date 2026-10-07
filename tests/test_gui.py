@@ -11,7 +11,7 @@ import wave
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QObject, QSettings, Qt, Signal
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtTest import QTest
@@ -577,14 +577,22 @@ def test_replacement_failure_keeps_previous_preview(window, monkeypatch, failure
     assert all(candidate.closed == 1 for candidate in candidates)
 
 
-def test_gui_prepares_vulkan_platform_before_constructing_the_window(monkeypatch):
-    from stavellum import qt
+def test_gui_prepares_vulkan_platform_before_constructing_the_window(app, monkeypatch):
+    from stavellum import qt, startup
 
     events = []
+    pending = []
+
+    def execute():
+        assert events == ["prepared", "covered"]
+        for callback in pending:
+            callback()
+        return 0
+
     application = SimpleNamespace(
         setApplicationName=lambda name: None, setOrganizationName=lambda name: None,
         setWindowIcon=lambda icon: None,
-        exec=lambda: 0,
+        exec=execute,
     )
 
     def prepare(settings):
@@ -592,19 +600,41 @@ def test_gui_prepares_vulkan_platform_before_constructing_the_window(monkeypatch
         events.append("prepared")
         return application
 
-    class Window:
-        def __init__(self, project_path):
+    class Cover(QObject):
+        finished = Signal()
+        close_requested = Signal()
+
+        def __init__(self):
+            super().__init__()
             assert events == ["prepared"]
-            assert project_path == "existing.stproj"
+            self.cancelled = False
+
+        def show(self):
+            events.append("covered")
+
+        def mark_ready(self):
+            events.append("ready")
+            self.finished.emit()
+
+    class Window:
+        def __init__(self):
+            assert events == ["prepared", "covered"]
             events.append("created")
 
         def _show_welcome(self):
             events.append("shown")
 
+        def open_path(self, project_path):
+            assert project_path == "existing.stproj"
+            assert events[-1] == "shown"
+            events.append("opened")
+
     monkeypatch.setattr(qt, "prepare_render_app", prepare)
     monkeypatch.setattr(gui_module, "MainWindow", Window)
+    monkeypatch.setattr(startup, "StartupSplash", Cover)
+    monkeypatch.setattr(gui_module.QTimer, "singleShot", lambda delay, callback: pending.append(callback))
     assert gui_module.run_gui("existing.stproj") == 0
-    assert events == ["prepared", "created", "shown"]
+    assert events == ["prepared", "covered", "created", "ready", "shown", "opened"]
 
 
 @pytest.mark.parametrize("name", ["fast", "medium", "slow", "very_slow"])
