@@ -1909,11 +1909,38 @@ class MainWindow(QMainWindow):
 
 def run_gui(project_path: str | None = None) -> int:
     from .qt import prepare_render_app
+    from .startup import StartupSplash
 
     app = prepare_render_app(RenderSettings())
     app.setApplicationName("Stavellum")
     app.setWindowIcon(application_icon())
     app.setOrganizationName("Stavellum")
-    window = MainWindow(project_path)
-    window._show_welcome()
+    splash = StartupSplash()
+    window = None
+
+    def reveal_workspace() -> None:
+        if window is None or splash.cancelled:
+            return
+        window._show_welcome()
+        splash.deleteLater()
+        if project_path:
+            window.open_path(project_path)
+
+    def cancel_startup() -> None:
+        if window is not None:
+            window.close()
+        app.quit()
+
+    def initialize_workspace() -> None:
+        nonlocal window
+        if splash.cancelled:
+            return
+        # Delay opening a requested project until its window owns navigation.
+        window = MainWindow()
+        splash.mark_ready()
+
+    splash.finished.connect(reveal_workspace)
+    splash.close_requested.connect(cancel_startup)
+    splash.show()
+    QTimer.singleShot(0, initialize_workspace)
     return app.exec()
