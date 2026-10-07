@@ -1496,10 +1496,7 @@ class MainWindow(QMainWindow):
             if self._job and self._job.operation not in {"video", "parts"}:
                 self._set_job_message("任务完成")
         except Exception as exc:
-            if self._wizard_importing:
-                self._job_error(f"读取后台结果失败：{exc}", str(exc))
-            else:
-                self._show_error(f"读取后台结果失败：{exc}")
+            self._job_error(f"读取后台结果失败：{exc}", str(exc))
 
     def _job_progress(self, fraction: float, message: str) -> None:
         if self._job and self._job.operation in {"video", "parts"}:
