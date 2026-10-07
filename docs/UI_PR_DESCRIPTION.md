@@ -1,95 +1,62 @@
-# feat: 引入 Rust 原生后端并精简桌面 UI
+# feat: add Rust native backends and simplify the desktop UI
 
-## 问题与结果
+## Summary
 
-本 PR 将此前的 Rust 原生迁移与后续桌面改动一并提交至上游 `Creeper19472/stavellum` 的 `main`。
-Vulkan 合成器和场景每帧求值核心由 Rust 提供，Python 保留调用桥接；
-原生 ABI 保持兼容，Windows wheel 携带两份 DLL。UI 部分统一桌面样式、缩小常用操作入口，
-并修复重新导入、时间轴和后台结果处理中的状态问题。
+Add Rust backends for Vulkan compositing and per-frame scene evaluation, with Python bindings and Windows wheel packaging. Native C ABI versions remain compatible, and the Qt C++ rendering backend remains selectable.
 
-桌面界面的样式不一致，常用操作分散在菜单中，欢迎页的品牌与装饰占用了较多空间。
-现在编辑器、新建向导和工程列表共享深色主题；编辑器的主要操作收为小图标按钮，
-工程列表保留紧凑操作和最近工程，选中行仅使用淡色背景。
-进入工程列表前显示独立的音乐主题启动封面，准备好后约 1.4 秒自动继续，支持点击、
-Enter / Space 跳过及关闭取消。
+Unify the editor, project wizard and welcome window under a shared desktop theme. Move frequently used editor actions into compact icon buttons, simplify the recent-project list and add a skippable startup cover. Fix saved-path handling after reimport, keyboard seeking and error states when applying background results.
 
-重新导入、键盘移动时间轴和后台结果应用失败时的状态问题也已修复。
-贡献规范、PR 模板和 Windows CI 为这些行为提供统一的验证与审查要求。
+## Changes
 
-来源为 `CavanasD:feat/desktop-ui-pr-standards`，目标为上游 `main`。
-原先在 fork 中建立的两份阶段草稿由此上游 PR 取代；功能提交保留拆分，供逐项审查。
+- Implement instanced quads, adjacent texture batching, persistently mapped buffers, tightly packed readback and batched submissions in the Rust Vulkan compositor. Compile WGSL shaders during the build.
+- Implement native time-axis evaluation, camera motion, track interpolation, activity envelopes and tile planning in the Rust scene core. Add parity and native contract tests.
+- Add Windows build tooling and package both Rust DLLs in the wheel. Retain Python import, notation, layout and desktop workflows.
+- Use packaged SVG icons for new, open, save, video export, preview refresh and playback. Preserve tooltips, accessible names and menu shortcuts.
+- Simplify the welcome window, make recent projects scrollable and keyboard-accessible, and elide names and paths separately. Use a subtle selection background without a side stripe.
+- Show a separate startup cover before the welcome window. Continue automatically about 1.4 seconds after initialization, allow click/Enter/Space to skip, and cancel startup on close or Escape. Open a supplied project after the cover finishes.
+- Preserve the saved path after reimport; update preview time on keyboard slider changes without recursive rendering; restore failure state and controls when a background result cannot be applied.
+- Add contribution guidelines, a PR template, title validation and Windows Python/Rust checks. Include reproducible UI captures and review evidence.
 
-## 变更范围
+Project files, Python runtime dependencies, CLI arguments and native ABI versions remain compatible. Source builds require rebuilding native DLLs after native code changes; wheel installations include the compiled libraries.
 
-- Rust Vulkan 合成器支持实例化四边形、纹理合并、持久映射缓冲、紧凑行回读和批量提交；着色器在构建期编译。场景核心负责时间轴、相机、轨道插值、活动包络及瓦片规划。
-- 添加 Python 调用桥接、原生对拍/契约测试与 Windows 构建和打包支持；旧 Qt C++ 后端仍可选择。包含迁移阶段的欢迎页、独立展示页与审查修复。
-- 共享桌面主题和随包发布的 SVG；新建、打开、保存、MP4 导出、更新预览及播放使用紧凑图标，保留提示、无障碍名称与菜单快捷键。
-- 简化工程起始页，取消大 Logo、装饰卡片与选中项左侧亮条；长名称和路径分别省略，最近工程可滚动并支持键盘打开。
-- 新启动封面使用独立背景和 Qt 绘制的文字/方格，适应小屏幕；指定工程在封面结束后打开，提前关闭不会继续初始化。
-- 重新导入后保留保存路径，Ctrl+S 写回原文件；键盘移动时间轴更新预览，内部进度刷新不会递归渲染；结果应用失败后恢复操作并显示失败状态。
-- 增加贡献说明、PR 模板、规范标题检查和 Windows Python/Rust CI；补充实际界面截图脚本及审查记录。
+Startup artwork provenance and its generation prompt are documented in [STARTUP_ART.md](STARTUP_ART.md).
 
-工程格式、Python 运行依赖、CLI 参数和原生 ABI 保持兼容。原生后端使用 Rust crates；
-Python 导入、记谱、排版及界面仍保留，不能视为整应用完成 Rust 重构。
-背景由内置 imagegen 生成，来源和最终提示词见 [STARTUP_ART.md](STARTUP_ART.md)。
+## Validation
 
-## 提交拆分
+Local environment: Windows x64, Python 3.14 and PySide6 6.11.2, with DLLs built from the corresponding Rust sources.
 
-原生阶段有 6 个提交，分别为 Rust 迁移、迁移说明、独立欢迎页展示、迁移审查修复、
-Rust 格式化和工作区清单格式修正。后续 UI / PR 流程的 8 个提交如下：
-
-1. PR 贡献规范与 CI。
-2. 重新导入的保存路径修复及回归测试。
-3. 键盘时间轴修复及回归测试。
-4. 后台结果失败状态修复及回归测试。
-5. 统一主题、紧凑编辑器按钮及向导样式。
-6. 简约工程起始页和最近工程列表。
-7. 可跳过的启动封面及启动流程测试。
-8. 截图工具、公开截图、Review 记录和 PR 说明。
-
-目标仓库与 PR 说明同步单独作为第 15 个文档提交，原有 14 个提交保留。
-
-## 验证
-
-Windows x64、Python 3.14、PySide6 6.11.2，使用与当前 Rust 源码对应的本机 DLL。
-
-| 检查 | 结果 |
+| Check | Result |
 | --- | --- |
-| `uv run ruff check src tests scripts` | 通过 |
-| 独立 Rust 迁移基础快照的原生核心、合成器、回读、启动、欢迎页及品牌测试 | 80 通过，1 跳过，30.15 秒；离屏平台跳过原生窗口堆叠 |
-| GUI、欢迎页、向导、启动流程、品牌及启动封面测试 | 144 通过，1 跳过，50.63 秒；离屏平台跳过原生窗口堆叠 |
-| 原生 Windows 启动封面与向导所有权/层叠测试 | 9 通过，2.06 秒，覆盖上述跳过项 |
-| Rust fmt / workspace test / clippy | 通过；8 项单元测试及文档测试通过，使用仓库构建助手加载 MSVC 环境 |
-| `uv build --wheel` | 通过；确认主题、启动模块/PNG、10 个 SVG 和两份 Rust DLL 均在包内 |
-| 独立 Rust 迁移基础快照的 wheel 构建 | 通过 |
-| PR 标题格式检查、`git diff --check` | 通过 |
+| uv run ruff check src tests scripts | Passed |
+| Native-migration snapshot: core, compositor, readback, startup, welcome and branding tests | 80 passed, 1 skipped; 30.15 s |
+| Final GUI, welcome, wizard, startup workflow, branding and splash tests | 144 passed, 1 skipped; 50.63 s |
+| Native Windows splash and wizard ownership/stacking tests | 9 passed; 2.06 s; covers the offscreen skip |
+| cargo fmt --all -- --check | Passed |
+| cargo test --workspace --locked | 8 unit tests passed; doc tests passed |
+| cargo clippy --workspace --all-targets --locked -- -D warnings | Passed |
+| uv build --wheel | Passed; verified the theme, splash module/artwork, 10 SVG assets and both Rust DLLs |
+| Native-migration snapshot wheel build | Passed |
+| PR title validation and git diff --check | Passed |
 
-完整命令、修复依据和验证范围见 [UI_PR_REVIEW.md](UI_PR_REVIEW.md)。
-新启动封面之前的完整套件结果属于阶段记录，未作为最终提交的完整测试结果填入上表。
+The skipped test requires native Windows window stacking and cannot run on the offscreen Qt platform. Rust checks use the MSVC environment loaded by scripts.build_rust.build_environment().
+Detailed commands and regression coverage are listed in [UI_PR_REVIEW.md](UI_PR_REVIEW.md).
 
-## UI 证据
+## UI evidence
 
-实际 Qt 界面截图；工程和来源路径仅替换为公开示例路径。
-欢迎页 1060×720、编辑器 1480×920，离屏缩放 100%；启动封面原生逻辑尺寸 960×600、系统缩放 150%。
-另检查了 900×620 / 1000×700 的较小窗口，以及 150% 离屏缩放。
-复现：`uv run python scripts/preview_ui.py --output artifacts/ui-preview --public-paths`。
+These are captures of running Qt widgets. Local sample paths are replaced with public placeholders. The welcome window is 1060×720 and the editor is 1480×920 at 100% offscreen scale. The native startup cover is 960×600 logical pixels at 150% Windows scale. Smaller 900×620 and 1000×700 windows and 150% offscreen scale were also inspected.
 
-![启动封面](screenshots/startup.png)
+Reproduce with:
 
-![工程起始页](screenshots/welcome.png)
+    uv run python scripts/preview_ui.py --output artifacts/ui-preview --public-paths
 
-![编辑器图标操作](screenshots/editor.png)
+![Startup cover](screenshots/startup.png)
 
-## 限制与迁移
+![Project welcome window](screenshots/welcome.png)
 
-此草稿直接提交到上游 `main`，包含原生迁移及 UI 改动。CI 使用离屏 Qt，GPU 导出和其他设备仍需相应设备验证。
-未复测外部 FLP 参考工程或完整的慢速视频导出。新工作流的远端执行结果以 PR 检查区为准；
-分支保护仍需维护者配置。源码更新原生代码后须重新构建 DLL；wheel 安装用户无需现场编译。
-未在其他硬件复测 GPU 性能，不将历史文档中的性能数字作为本次验证。无需工程格式迁移。
+![Editor actions](screenshots/editor.png)
 
-## 提交检查
+## Limitations
 
-- [x] 标题符合 `type(scope): 描述`，范围与当前 diff 一致。
-- [x] 已按贡献规范记录本次验证结果。
-- [x] 行为修复有回归测试，文档和随包素材已同步。
-- [x] 未提交临时文件、生成的 DLL、缓存、个人路径或凭据；公开截图使用示例路径。
+The listed checks cover native contracts and affected desktop workflows, rather than a complete final application test run. External FLP reference projects and the slow video-export suite were not rerun. GPU performance has not been remeasured on other hardware; historical benchmark figures are not presented as current validation.
+
+CI uses offscreen Qt. GPU export and device-specific behavior require corresponding hardware checks. Remote check results are available in the PR checks section. No project-format migration is required.
