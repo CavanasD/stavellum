@@ -163,7 +163,10 @@ impl Track {
                 "Layout track keys must be sorted by time",
             )?;
         }
-        if !keys.iter().all(|key| key.time.is_finite() && key.value.is_finite()) {
+        if !keys
+            .iter()
+            .all(|key| key.time.is_finite() && key.value.is_finite())
+        {
             return Err("Layout track keys must be finite".to_owned());
         }
         Ok(Self { keys })
@@ -171,17 +174,29 @@ impl Track {
 
     fn sample(&self, time: f64) -> CurveKey {
         let index = match self.keys.binary_search_by(|key| {
-            key.time.partial_cmp(&time).unwrap_or(std::cmp::Ordering::Equal)
+            key.time
+                .partial_cmp(&time)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }) {
             Ok(index) => index,
             Err(index) => index.saturating_sub(1),
         };
         let first = self.keys[index];
         let Some(last) = self.keys.get(index + 1) else {
-            return CurveKey { time, value: first.value, velocity: 0.0, acceleration: 0.0 };
+            return CurveKey {
+                time,
+                value: first.value,
+                velocity: 0.0,
+                acceleration: 0.0,
+            };
         };
         if time < first.time || last.time <= first.time {
-            return CurveKey { time, value: first.value, velocity: 0.0, acceleration: 0.0 };
+            return CurveKey {
+                time,
+                value: first.value,
+                velocity: 0.0,
+                acceleration: 0.0,
+            };
         }
         let duration = last.time - first.time;
         let fraction = ((time - first.time) / duration).clamp(0.0, 1.0);
@@ -241,14 +256,19 @@ impl TimeAxis {
             let first_weight = 2.0 * after + before;
             let second_weight = after + 2.0 * before;
             let smallest_slope = previous.min(following);
-            let value = smallest_slope * ((first_weight + second_weight)
-                / (first_weight * (smallest_slope / previous)
-                    + second_weight * (smallest_slope / following)));
+            let value = smallest_slope
+                * ((first_weight + second_weight)
+                    / (first_weight * (smallest_slope / previous)
+                        + second_weight * (smallest_slope / following)));
             // A stricter PCHIP limit prevents near-stops within long beats.
             derivatives.push(value.min(2.0 * previous.min(following)));
         }
         derivatives.push(*slopes.last().expect("non-empty"));
-        Ok(Self { beats, xs, derivatives })
+        Ok(Self {
+            beats,
+            xs,
+            derivatives,
+        })
     }
 
     fn segment(&self, index: usize) -> (f64, f64, f64, f64, f64) {
@@ -266,7 +286,8 @@ impl TimeAxis {
         let (interval, start, end, first, last) = self.segment(index);
         let square = fraction * fraction;
         let cube = square * fraction;
-        start + (-2.0 * cube + 3.0 * square) * (end - start)
+        start
+            + (-2.0 * cube + 3.0 * square) * (end - start)
             + (cube - 2.0 * square + fraction) * interval * first
             + (cube - square) * interval * last
     }
@@ -287,7 +308,9 @@ impl TimeAxis {
 
     fn search(&self, beat: f64) -> usize {
         match self.beats.binary_search_by(|value| {
-            value.partial_cmp(&beat).unwrap_or(std::cmp::Ordering::Equal)
+            value
+                .partial_cmp(&beat)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }) {
             Ok(index) => index.min(self.beats.len() - 2),
             Err(index) => index.saturating_sub(1).min(self.beats.len() - 2),
@@ -355,7 +378,11 @@ impl TimeAxis {
             let (right, value) = if start < self.beats[0] {
                 let right = end.min(self.beats[0]);
                 let middle = (start + right) / 2.0;
-                let value = if difference { self.derivatives[0] } else { self.x_at(middle) };
+                let value = if difference {
+                    self.derivatives[0]
+                } else {
+                    self.x_at(middle)
+                };
                 (right, value)
             } else if start >= *self.beats.last().expect("non-empty") {
                 let middle = (start + end) / 2.0;
@@ -369,12 +396,13 @@ impl TimeAxis {
                 let index = self.search(start);
                 let interval = self.beats[index + 1] - self.beats[index];
                 let right = end.min(self.beats[index + 1]);
-                let midpoint = ((start - self.beats[index]) + (right - self.beats[index]))
-                    / (2.0 * interval);
+                let midpoint =
+                    ((start - self.beats[index]) + (right - self.beats[index])) / (2.0 * interval);
                 let radius = (right - start) / (2.0 * interval);
                 let (first, second, third, fourth) = self.coefficients(index);
                 let value = if difference {
-                    (second + 2.0 * third * midpoint
+                    (second
+                        + 2.0 * third * midpoint
                         + 3.0 * fourth * (midpoint * midpoint + radius * radius / 3.0))
                         / interval
                 } else {
@@ -480,8 +508,7 @@ impl Camera {
             self.axis.polynomial_at(beat)
         } else {
             let (left, right) = (beat - radius, beat + radius);
-            return (self.axis.speed_at(right) - self.axis.speed_at(left))
-                / (right - left)
+            return (self.axis.speed_at(right) - self.axis.speed_at(left)) / (right - left)
                 * self.beats_per_second
                 * self.beats_per_second;
         };
@@ -538,8 +565,7 @@ impl CoreScene {
             ease((time - self.consts.expansion_start) / self.consts.expansion_duration)
         };
         (
-            self.consts.region_top
-                + (self.consts.expanded_top - self.consts.region_top) * fraction,
+            self.consts.region_top + (self.consts.expanded_top - self.consts.region_top) * fraction,
             self.consts.region_bottom
                 + (self.consts.expanded_bottom - self.consts.region_bottom) * fraction,
         )
@@ -560,8 +586,7 @@ impl CoreScene {
     /// level zero keeps native evaluation total for any finite input.
     fn raster_level(&self, display_scale: f64) -> i32 {
         let ratio = self.consts.scene_scale / display_scale;
-        if !(display_scale.is_finite() && display_scale > 0.0
-            && ratio.is_finite() && ratio > 0.0) {
+        if !(display_scale.is_finite() && display_scale > 0.0 && ratio.is_finite() && ratio > 0.0) {
             return 0;
         }
         let mut level = (ratio.log2().floor().max(0.0) as i32).min(1023);
@@ -577,7 +602,12 @@ impl CoreScene {
     }
 
     /// Evaluate one frame; rows are written in part order.
-    pub fn frame(&self, presentation_time: f64, audio_time: f64, rows: &mut [CoreRow]) -> CoreFrame {
+    pub fn frame(
+        &self,
+        presentation_time: f64,
+        audio_time: f64,
+        rows: &mut [CoreRow],
+    ) -> CoreFrame {
         let scale = self.zoom.sample(presentation_time).value.exp();
         let (region_top, region_bottom) = self.region_at(presentation_time);
         let world_x = self.camera.x_at(audio_time);
@@ -585,7 +615,11 @@ impl CoreScene {
         let mut visible_bottom = f64::NEG_INFINITY;
         for (index, part) in self.parts.iter().enumerate() {
             let top = part.tops.sample(presentation_time).value;
-            let alpha = part.opacities.sample(presentation_time).value.clamp(0.0, 1.0);
+            let alpha = part
+                .opacities
+                .sample(presentation_time)
+                .value
+                .clamp(0.0, 1.0);
             let indicator_height = self.consts.indicator_source_height * scale;
             let indicator_width = self.consts.indicator_source_width * scale;
             let indicator_top = top + part.staff_midpoint * scale - indicator_height / 2.0;
@@ -675,13 +709,17 @@ fn guarded(operation: impl FnOnce() -> Result<(), String>) -> i32 {
     };
     let status = i32::from(error.is_some());
     ERROR.with(|slot| {
-        *slot.borrow_mut() =
-            CString::new(error.unwrap_or_default().replace('\0', " ")).unwrap();
+        *slot.borrow_mut() = CString::new(error.unwrap_or_default().replace('\0', " ")).unwrap();
     });
     status
 }
 
-fn track_from(keys: &[CurveKey], counts: &[i64], index: usize, offset: &mut usize) -> Result<Track, String> {
+fn track_from(
+    keys: &[CurveKey],
+    counts: &[i64],
+    index: usize,
+    offset: &mut usize,
+) -> Result<Track, String> {
     let count = *counts.get(index).ok_or("Track count array is too short")? as usize;
     require(
         *offset + count <= keys.len(),
@@ -735,10 +773,11 @@ pub unsafe extern "C" fn spcore_compile(
             score_offset: camera_offset,
             half_window: camera_window,
         };
-        require(zoom_count >= 1, "Layout zoom track requires at least one key")?;
-        let zoom = Track::new(
-            std::slice::from_raw_parts(zoom_keys, zoom_count as usize).to_vec(),
+        require(
+            zoom_count >= 1,
+            "Layout zoom track requires at least one key",
         )?;
+        let zoom = Track::new(std::slice::from_raw_parts(zoom_keys, zoom_count as usize).to_vec())?;
         let part_count = part_count as usize;
         let tops_counts = std::slice::from_raw_parts(tops_counts, part_count);
         let opacity_counts = std::slice::from_raw_parts(opacity_counts, part_count);
@@ -847,7 +886,12 @@ mod tests {
     use super::*;
 
     fn key(time: f64, value: f64) -> CurveKey {
-        CurveKey { time, value, velocity: 0.0, acceleration: 0.0 }
+        CurveKey {
+            time,
+            value,
+            velocity: 0.0,
+            acceleration: 0.0,
+        }
     }
 
     #[test]
@@ -874,7 +918,11 @@ mod tests {
 
     #[test]
     fn activity_envelope_attacks_and_releases() {
-        let notes = vec![Note { start: 1.0, end: 2.0, velocity: 127 }];
+        let notes = vec![Note {
+            start: 1.0,
+            end: 2.0,
+            velocity: 127,
+        }];
         let (level, _) = activity_levels(&notes, 1.5);
         assert!((level - 1.0).abs() < 1e-12);
         let (level, attack) = activity_levels(&notes, 1.05);
