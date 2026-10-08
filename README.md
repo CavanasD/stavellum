@@ -11,6 +11,9 @@ Convert FL Studio projects or MIDI into staff notation and scroll it on screen t
 
 The program renders frame by frame instead of capturing the screen. The default output is 1920×1080, 60 fps, H.264 + AAC, with **RHI Vulkan** frame compositing and NVIDIA NVENC encoding preferred, automatically falling back to the CPU when the hardware is unavailable.
 
+> [!NOTE]
+> This project is 99% vibe-coded. Use at your own risk!
+
 ## Installation and Launch
 
 For the best performance, your device should have at least **a graphics card and driver supporting Vulkan and 4×MSAA**.
